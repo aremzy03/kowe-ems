@@ -1,0 +1,45 @@
+meta {
+  name: 02 Create Term
+  type: http
+  seq: 2
+  tags: [
+    academics
+    smoke
+    phase1
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/terms/
+  body: json
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "session": "{{sessionId}}",
+    "name": "1st",
+    "start_date": "2026-09-01",
+    "end_date": "2026-12-15",
+    "is_active": true
+  }
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("termId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.name: eq 1st
+}

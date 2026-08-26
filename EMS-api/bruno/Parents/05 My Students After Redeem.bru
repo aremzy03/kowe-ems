@@ -1,0 +1,35 @@
+meta {
+  name: 05 My Students After Redeem
+  type: http
+  seq: 5
+  tags: [
+    parents
+    smoke
+    phase1
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/academics/my-students/
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.count: eq 1
+  res.body.results: isArray
+}
+
+tests {
+  test("linked student visible after redemption", function () {
+    const body = res.getBody();
+    expect(body.count).to.equal(1);
+    expect(body.results[0].id).to.equal(bru.getEnvVar("studentId"));
+  });
+}

@@ -1,0 +1,43 @@
+meta {
+  name: 13 Snapshot Audit After Retry
+  type: http
+  seq: 13
+  tags: [
+    assessment
+    smoke
+    phase2
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/audit-logs/?student={{studentId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const logs = Array.isArray(body) ? body : body.results || [];
+    bru.setEnvVar("auditCountAfterRetry", String(logs.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("identical retry produces no false AuditLog churn", function () {
+    expect(Number(bru.getEnvVar("auditCountAfterRetry"))).to.equal(
+      Number(bru.getEnvVar("auditCountAfterFirst"))
+    );
+  });
+}

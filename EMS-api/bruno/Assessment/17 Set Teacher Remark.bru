@@ -1,0 +1,36 @@
+meta {
+  name: 17 Set Teacher Remark
+  type: http
+  seq: 17
+  tags: [
+    assessment
+    smoke
+    phase2
+  ]
+}
+
+patch {
+  url: {{baseUrl}}/api/assessment/results/remarks/
+  body: json
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+body:json {
+  {
+    "student": "{{studentId}}",
+    "term": "{{termId}}",
+    "teacher_remark": "Shows consistent effort in continuous assessment."
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.teacher_remark: eq Shows consistent effort in continuous assessment.
+}

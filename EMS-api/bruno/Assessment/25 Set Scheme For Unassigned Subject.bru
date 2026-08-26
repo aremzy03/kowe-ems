@@ -1,0 +1,68 @@
+meta {
+  name: 25 Set Scheme For Unassigned Subject
+  type: http
+  seq: 25
+  tags: [
+    assessment
+    smoke
+    phase2
+    rbac
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/assessment/components/set-scheme/
+  body: json
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "subject": "{{unassignedSubjectId}}",
+    "class_level": "{{classLevelId}}",
+    "term": "{{termId}}",
+    "components": [
+      {
+        "name": "1st CA",
+        "weight_percentage": "20",
+        "max_score": "100"
+      },
+      {
+        "name": "2nd CA",
+        "weight_percentage": "20",
+        "max_score": "100"
+      },
+      {
+        "name": "Exam",
+        "weight_percentage": "60",
+        "max_score": "100"
+      }
+    ]
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body && Array.isArray(res.body.results)) {
+    for (const c of res.body.results) {
+      if (c.name === "1st CA") bru.setEnvVar("unassignedComponent1stCaId", c.id);
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.count: eq 3
+}
+
+tests {
+  test("unassigned subject has a component for deny tests", function () {
+    expect(bru.getEnvVar("unassignedComponent1stCaId")).to.be.a("string");
+  });
+}

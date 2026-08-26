@@ -1,0 +1,35 @@
+meta {
+  name: 07 Snapshot Audit Before Scores
+  type: http
+  seq: 7
+  tags: [
+    assessment
+    smoke
+    phase2
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/audit-logs/?student={{studentId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const logs = Array.isArray(body) ? body : body.results || [];
+    bru.setEnvVar("auditCountBefore", String(logs.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}

@@ -1,0 +1,54 @@
+meta {
+  name: 26 Teacher Bulk Upsert Unassigned Subject Denied
+  type: http
+  seq: 26
+  tags: [
+    assessment
+    smoke
+    phase2
+    rbac
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/assessment/scores/bulk-upsert/
+  body: json
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+body:json {
+  {
+    "entries": [
+      {
+        "student_id": "{{studentId}}",
+        "assessment_component_id": "{{unassignedComponent1stCaId}}",
+        "score": "10"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.succeeded: eq 0
+  res.body.failed: eq 1
+}
+
+tests {
+  test("teacher cannot bulk-upsert scores for unassigned subject", function () {
+    expect(res.getStatus()).to.equal(400);
+    const body = res.getBody();
+    expect(body.succeeded).to.equal(0);
+    expect(body.failed).to.equal(1);
+    expect(body.results[0].success).to.equal(false);
+    const blob = JSON.stringify(body.results[0].errors);
+    expect(blob).to.match(/not assigned|ClassSubjectAssignment/i);
+  });
+}

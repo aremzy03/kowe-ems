@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Report Card — {{ student_name }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 18mm 16mm;
+    }
+    body {
+      font-family: DejaVu Sans, Helvetica, Arial, sans-serif;
+      font-size: 11pt;
+      color: #1a1a1a;
+      line-height: 1.35;
+    }
+    .header {
+      display: table;
+      width: 100%;
+      border-bottom: 2px solid #222;
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+    }
+    .header-left, .header-right {
+      display: table-cell;
+      vertical-align: middle;
+    }
+    .header-right { text-align: right; width: 120px; }
+    .logo-box {
+      width: 72px;
+      height: 72px;
+      border: 1.5px dashed #888;
+      text-align: center;
+      font-size: 8pt;
+      color: #666;
+      line-height: 72px;
+    }
+    .school-name {
+      font-size: 18pt;
+      font-weight: bold;
+      margin: 0 0 4px 0;
+    }
+    .doc-title {
+      font-size: 12pt;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #333;
+      margin: 0;
+    }
+    h2 {
+      font-size: 11pt;
+      margin: 16px 0 6px 0;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 3px;
+    }
+    .meta {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 4px;
+    }
+    .meta td {
+      padding: 3px 6px 3px 0;
+      vertical-align: top;
+    }
+    .meta .label {
+      color: #555;
+      width: 28%;
+      font-size: 9.5pt;
+      white-space: nowrap;
+      hyphens: none;
+    }
+    table.scores {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      font-size: 9.5pt;
+    }
+    table.scores th, table.scores td {
+      border: 1px solid #bbb;
+      padding: 4px 6px;
+      text-align: left;
+    }
+    table.scores th {
+      background: #f0f0f0;
+      font-weight: bold;
+    }
+    table.scores td.num, table.scores th.num {
+      text-align: right;
+      white-space: nowrap;
+    }
+    .subject-block { margin-bottom: 10px; }
+    .subject-title {
+      font-weight: bold;
+      margin-bottom: 3px;
+    }
+    .summary-box {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border: 1px solid #888;
+      background: #fafafa;
+    }
+    .remarks p {
+      margin: 4px 0 10px 0;
+      min-height: 1.4em;
+      white-space: pre-wrap;
+    }
+    .remarks .empty {
+      color: #888;
+      font-style: italic;
+    }
+    /* PHASE 3 PLACEHOLDER — attendance summary.
+       Do not remove this section; Phase 3 wires real counts into
+       ``attendance`` context. Until then ``available`` is false. */
+    .attendance {
+      margin-top: 4px;
+      padding: 8px 10px;
+      border: 1px dashed #999;
+      background: #fcfcfc;
+    }
+    .attendance .placeholder-label {
+      font-size: 8.5pt;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 4px;
+    }
+    .attendance .na {
+      color: #666;
+      font-style: italic;
+    }
+    .footnote {
+      margin-top: 18px;
+      font-size: 8pt;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <p class="school-name">{{ school_name }}</p>
+      <p class="doc-title">Student Report Card</p>
+    </div>
+    <div class="header-right">
+      {% if logo_placeholder %}
+      <div class="logo-box">Logo</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <h2>Student information</h2>
+  <table class="meta">
+    <tr>
+      <td class="label">Name</td>
+      <td>{{ student_name }}</td>
+      <td class="label">Admission no.</td>
+      <td>{{ admission_number }}</td>
+    </tr>
+    <tr>
+      <td class="label">Class</td>
+      <td>{{ class_label }}</td>
+      <td class="label">Session/Term</td>
+      <td>{{ session_name }} — {{ term_name }}</td>
+    </tr>
+  </table>
+
+  <h2>Subject results</h2>
+  {% if subjects %}
+    {% for subj in subjects %}
+    <div class="subject-block">
+      <div class="subject-title">
+        {{ subj.subject_name }}
+        {% if subj.subject_code %}({{ subj.subject_code }}){% endif %}
+        — Term total: <strong>{{ subj.computed_score }}</strong>
+      </div>
+      {% if subj.components %}
+      <table class="scores">
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th class="num">Weight %</th>
+            <th class="num">Max</th>
+            <th class="num">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in subj.components %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td class="num">{{ c.weight_percentage }}</td>
+            <td class="num">{{ c.max_score }}</td>
+            <td class="num">{{ c.score_display }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">No component scheme recorded for this subject.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">No subject results for this term.</p>
+  {% endif %}
+
+  <div class="summary-box">
+    <strong>Overall average:</strong> {{ overall_average }}
+    &nbsp;&nbsp;|&nbsp;&nbsp;
+    <strong>Class position:</strong> {{ class_position_display }}
+  </div>
+
+  <h2>Remarks</h2>
+  <div class="remarks">
+    <strong>Teacher remark</strong>
+    {% if teacher_remark %}
+      <p>{{ teacher_remark }}</p>
+    {% else %}
+      <p class="empty">No teacher remark.</p>
+    {% endif %}
+    <strong>Admin remark</strong>
+    {% if admin_remark %}
+      <p>{{ admin_remark }}</p>
+    {% else %}
+      <p class="empty">No admin remark.</p>
+    {% endif %}
+  </div>
+
+  {# --- Attendance (Phase 3 placeholder) --- #}
+  <h2>Attendance summary</h2>
+  <div class="attendance">
+    <div class="placeholder-label">
+      <!-- PHASE3_ATTENDANCE_SECTION: replace placeholder when TermAttendanceSummary exists -->
+      Attendance (Phase 3)
+    </div>
+    {% if attendance.available %}
+      <table class="meta">
+        <tr>
+          <td class="label">Days present</td>
+          <td>{{ attendance.days_present }}</td>
+          <td class="label">Days absent</td>
+          <td>{{ attendance.days_absent }}</td>
+        </tr>
+        <tr>
+          <td class="label">Days late</td>
+          <td>{{ attendance.days_late }}</td>
+          <td class="label">School days</td>
+          <td>{{ attendance.total_school_days }}</td>
+        </tr>
+      </table>
+    {% else %}
+      <p class="na">{{ attendance.message|default:"Not available" }}</p>
+    {% endif %}
+  </div>
+
+  <p class="footnote">{{ recompute_note }} Generated {{ generated_at|date:"Y-m-d H:i" }}.</p>
+</body>
+</html>

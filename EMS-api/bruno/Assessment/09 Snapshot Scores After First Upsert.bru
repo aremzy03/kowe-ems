@@ -1,0 +1,43 @@
+meta {
+  name: 09 Snapshot Scores After First Upsert
+  type: http
+  seq: 9
+  tags: [
+    assessment
+    smoke
+    phase2
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/scores/
+  body: none
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const scores = Array.isArray(body) ? body : body.results || [];
+    const forStudent = scores.filter((s) => s.student === bru.getEnvVar("studentId"));
+    bru.setEnvVar("scoreCountAfterFirst", String(forStudent.length));
+    bru.setEnvVar("scoreCountTotalAfterFirst", String(scores.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("first upsert yields exactly 3 Score rows for the student", function () {
+    expect(Number(bru.getEnvVar("scoreCountAfterFirst"))).to.equal(3);
+  });
+}

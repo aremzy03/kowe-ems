@@ -1,0 +1,35 @@
+meta {
+  name: 23 Report Card As Admin
+  type: http
+  seq: 23
+  tags: [
+    assessment
+    smoke
+    phase2
+    report-card
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/report-cards/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Accept: */*
+  Authorization: Bearer {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("admin can download any student report card PDF", function () {
+    expect(res.getStatus()).to.equal(200);
+    const ct = res.getHeader("content-type") || res.getHeader("Content-Type") || "";
+    expect(String(ct)).to.match(/application\/pdf/i);
+  });
+}

@@ -1,0 +1,36 @@
+meta {
+  name: 16 Broadsheet As Admin
+  type: http
+  seq: 16
+  tags: [
+    assessment
+    smoke
+    phase2
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/broadsheet/?class_level={{classLevelId}}&arm={{armId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.scope: eq admin
+}
+
+tests {
+  test("admin broadsheet covers class without subject filter", function () {
+    const body = res.getBody();
+    expect(body.scope).to.equal("admin");
+    expect(body.columns).to.be.an("array");
+    expect(body.rows).to.be.an("array");
+  });
+}

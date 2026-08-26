@@ -1,0 +1,54 @@
+meta {
+  name: 05 Create Staff Invite Bursar
+  type: http
+  seq: 5
+  tags: [
+    auth
+    phase1
+    invite
+    2fa
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/memberships/invites/
+  body: json
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "email": "{{bursarEmail}}",
+    "role": "bursar"
+  }
+}
+
+script:pre-request {
+  const stamp = Date.now().toString(36);
+  const email = process.env.BURSAR_EMAIL || `bursar.bruno.${stamp}@example.com`;
+  bru.setEnvVar("bursarEmail", email);
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.accept_url) {
+    const m = String(res.body.accept_url).match(/[?&]token=([^&]+)/);
+    if (m) {
+      bru.setEnvVar("inviteToken", decodeURIComponent(m[1]));
+    }
+    bru.setEnvVar("inviteAcceptUrl", res.body.accept_url);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.role: eq bursar
+  res.body.status: eq pending
+  res.body.accept_url: isDefined
+}

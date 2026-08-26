@@ -1,0 +1,35 @@
+meta {
+  name: 28 Parent Student Results Unlinked Denied
+  type: http
+  seq: 28
+  tags: [
+    assessment
+    smoke
+    phase2
+    rbac
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/results/student/?student={{unlinkedStudentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 400
+}
+
+tests {
+  test("parent cannot view results for unlinked student", function () {
+    expect(res.getStatus()).to.equal(400);
+    const blob = JSON.stringify(res.getBody());
+    expect(blob).to.match(/link|linking code|verified/i);
+  });
+}

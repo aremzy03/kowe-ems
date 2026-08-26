@@ -1,0 +1,43 @@
+meta {
+  name: 10 Snapshot Audit After First Upsert
+  type: http
+  seq: 10
+  tags: [
+    assessment
+    smoke
+    phase2
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/audit-logs/?student={{studentId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const logs = Array.isArray(body) ? body : body.results || [];
+    bru.setEnvVar("auditCountAfterFirst", String(logs.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("first upsert writes audit rows for real score creates", function () {
+    const before = Number(bru.getEnvVar("auditCountBefore") || "0");
+    const after = Number(bru.getEnvVar("auditCountAfterFirst"));
+    expect(after).to.equal(before + 3);
+  });
+}

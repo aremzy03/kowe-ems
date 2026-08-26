@@ -1,0 +1,37 @@
+meta {
+  name: 20 Report Card Parent Linked Child
+  type: http
+  seq: 20
+  tags: [
+    assessment
+    smoke
+    phase2
+    report-card
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/report-cards/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Accept: */*
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("parent can download PDF for linked child", function () {
+    expect(res.getStatus()).to.equal(200);
+    const ct = res.getHeader("content-type") || res.getHeader("Content-Type") || "";
+    expect(String(ct)).to.match(/application\/pdf/i);
+    const cd = res.getHeader("content-disposition") || res.getHeader("Content-Disposition") || "";
+    expect(String(cd)).to.match(/attachment/i);
+  });
+}

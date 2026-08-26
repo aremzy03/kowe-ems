@@ -1,0 +1,73 @@
+meta {
+  name: 04 Set Valid Component Scheme
+  type: http
+  seq: 4
+  tags: [
+    assessment
+    smoke
+    phase2
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/assessment/components/set-scheme/
+  body: json
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "subject": "{{subjectId}}",
+    "class_level": "{{classLevelId}}",
+    "term": "{{termId}}",
+    "components": [
+      {
+        "name": "1st CA",
+        "weight_percentage": "20",
+        "max_score": "100"
+      },
+      {
+        "name": "2nd CA",
+        "weight_percentage": "20",
+        "max_score": "100"
+      },
+      {
+        "name": "Exam",
+        "weight_percentage": "60",
+        "max_score": "100"
+      }
+    ]
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body && Array.isArray(res.body.results)) {
+    for (const c of res.body.results) {
+      if (c.name === "1st CA") bru.setEnvVar("component1stCaId", c.id);
+      if (c.name === "2nd CA") bru.setEnvVar("component2ndCaId", c.id);
+      if (c.name === "Exam") bru.setEnvVar("componentExamId", c.id);
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.count: eq 3
+}
+
+tests {
+  test("valid scheme stores three components totaling 100%", function () {
+    const body = res.getBody();
+    expect(body.count).to.equal(3);
+    expect(bru.getEnvVar("component1stCaId")).to.be.a("string");
+    expect(bru.getEnvVar("component2ndCaId")).to.be.a("string");
+    expect(bru.getEnvVar("componentExamId")).to.be.a("string");
+  });
+}

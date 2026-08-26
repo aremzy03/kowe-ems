@@ -1,0 +1,46 @@
+meta {
+  name: 14 Recompute Class Results
+  type: http
+  seq: 14
+  tags: [
+    assessment
+    smoke
+    phase2
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/assessment/results/recompute/
+  body: json
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+body:json {
+  {
+    "class_level": "{{classLevelId}}",
+    "arm": "{{armId}}",
+    "term": "{{termId}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.detail: eq Class results recomputed.
+}
+
+tests {
+  test("recompute returns summaries with class positions", function () {
+    const body = res.getBody();
+    expect(body.students).to.be.at.least(1);
+    expect(body.summaries).to.be.an("array");
+    expect(body.summaries.length).to.be.at.least(1);
+    expect(body.summaries[0].class_position).to.be.a("number");
+  });
+}

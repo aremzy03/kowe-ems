@@ -1,0 +1,63 @@
+meta {
+  name: 03 Reject Bad Component Weights
+  type: http
+  seq: 3
+  tags: [
+    assessment
+    smoke
+    phase2
+    validation
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/assessment/components/set-scheme/
+  body: json
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "subject": "{{subjectId}}",
+    "class_level": "{{classLevelId}}",
+    "term": "{{termId}}",
+    "components": [
+      {
+        "name": "1st CA",
+        "weight_percentage": "40",
+        "max_score": "100"
+      },
+      {
+        "name": "2nd CA",
+        "weight_percentage": "40",
+        "max_score": "100"
+      },
+      {
+        "name": "Exam",
+        "weight_percentage": "40",
+        "max_score": "100"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+}
+
+tests {
+  test("rejects scheme weights that do not sum to 100", function () {
+    expect(res.getStatus()).to.equal(400);
+    const body = res.getBody();
+    const blob = JSON.stringify(body);
+    expect(blob).to.match(/100/);
+    expect(blob).to.match(/120|sum|weight/i);
+  });
+}

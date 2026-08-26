@@ -1,0 +1,40 @@
+meta {
+  name: 08 2FA Enroll
+  type: http
+  seq: 8
+  tags: [
+    auth
+    phase1
+    2fa
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/auth/2fa/enroll/
+  body: json
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{bursarPreAuthToken}}
+}
+
+body:json {
+  {}
+}
+
+script:post-response {
+  if (res.status === 200 && res.body && res.body.secret) {
+    bru.setEnvVar("totpSecret", res.body.secret);
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.secret: isDefined
+  res.body.config_url: isDefined
+  res.body.qr_code: isDefined
+}

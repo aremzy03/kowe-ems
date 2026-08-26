@@ -1,0 +1,49 @@
+meta {
+  name: 12 Snapshot Scores After Retry
+  type: http
+  seq: 12
+  tags: [
+    assessment
+    smoke
+    phase2
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/scores/
+  body: none
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const scores = Array.isArray(body) ? body : body.results || [];
+    const forStudent = scores.filter((s) => s.student === bru.getEnvVar("studentId"));
+    bru.setEnvVar("scoreCountAfterRetry", String(forStudent.length));
+    bru.setEnvVar("scoreCountTotalAfterRetry", String(scores.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("retry does not duplicate Score rows", function () {
+    expect(Number(bru.getEnvVar("scoreCountAfterRetry"))).to.equal(
+      Number(bru.getEnvVar("scoreCountAfterFirst"))
+    );
+    expect(Number(bru.getEnvVar("scoreCountTotalAfterRetry"))).to.equal(
+      Number(bru.getEnvVar("scoreCountTotalAfterFirst"))
+    );
+    expect(Number(bru.getEnvVar("scoreCountAfterRetry"))).to.equal(3);
+  });
+}

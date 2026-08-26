@@ -1,0 +1,38 @@
+meta {
+  name: 06 Accept Staff Invite Bursar
+  type: http
+  seq: 6
+  tags: [
+    auth
+    phase1
+    invite
+    2fa
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/memberships/invites/accept/
+  body: json
+  auth: none
+}
+
+headers {
+  Host: {{tenantHost}}
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "token": "{{inviteToken}}",
+    "password": "{{bursarPassword}}",
+    "first_name": "Bruno",
+    "last_name": "Bursar"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.membership.role: eq bursar
+  res.body.created_user: eq true
+}
