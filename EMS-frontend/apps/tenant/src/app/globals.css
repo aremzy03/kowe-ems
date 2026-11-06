@@ -6,13 +6,22 @@
   --color-ink: #211f26;
   --color-paper: #fbf6ec;
   --color-paper-tint: #f3ebda;
-  --color-paper-card: #fffffb;
+  --color-paper-card: #f7f1e4;
+  --color-kraft: #eae3d2;
+  --color-paper-field: #fffdf9;
 
   --color-accent-1: #5b3de8;
   --color-accent-2: #ff7a45;
+  --color-accent-2-ink: #9a4030;
   --color-success: #1c9c7c;
+  --color-success-ink: #0e6e54;
+  --color-wash-success: color-mix(in srgb, var(--color-success) 18%, var(--color-paper-card));
+  --color-wash-warning: color-mix(in srgb, var(--color-warning) 32%, var(--color-paper-card));
+  --color-wash-danger: color-mix(in srgb, var(--color-danger) 16%, var(--color-paper-card));
+  --color-wash-info: color-mix(in srgb, var(--color-accent-1) 14%, var(--color-paper-card));
   --color-warning: #f5a623;
   --color-danger: #e14b4b;
+  --color-rule: #d8d2c5;
 
   --shadow-nb-sm: 2px 2px 0 0 var(--color-ink);
   --shadow-nb: 4px 4px 0 0 var(--color-ink);
@@ -35,12 +44,17 @@
     color: var(--color-ink);
     font-family: var(--font-body);
     line-height: 1.55;
-    background-image: radial-gradient(
-      circle at 1px 1px,
-      color-mix(in srgb, var(--color-ink) 7%, transparent) 1px,
-      transparent 0
-    );
-    background-size: 20px 20px;
+    background-image:
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 23px,
+        color-mix(in srgb, var(--color-rule) 80%, var(--color-paper)) 23px,
+        color-mix(in srgb, var(--color-rule) 80%, var(--color-paper)) 24px
+      ),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.16'/%3E%3C/svg%3E");
+    background-size: auto, 160px 160px;
+    background-attachment: fixed;
   }
   h1,
   h2,

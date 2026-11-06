@@ -11,6 +11,68 @@ from memberships.models import SchoolMembership, StaffInvite
 
 User = get_user_model()
 
+LAST_ADMIN_MESSAGE = 'Cannot remove the last active school admin.'
+
+
+def would_remove_last_active_admin(membership, *, new_role=None, new_is_active=None):
+    """True when this change would leave the school with no active admin."""
+    if membership.role != SchoolMembership.Role.ADMIN or not membership.is_active:
+        return False
+    role = membership.role if new_role is None else new_role
+    is_active = membership.is_active if new_is_active is None else new_is_active
+    if role == SchoolMembership.Role.ADMIN and is_active:
+        return False
+    return not (
+        SchoolMembership.objects.filter(
+            role=SchoolMembership.Role.ADMIN,
+            is_active=True,
+        )
+        .exclude(pk=membership.pk)
+        .exists()
+    )
+
+
+class SchoolMembershipSerializer(serializers.ModelSerializer):
+    """
+    Staff directory row. ``user`` is the shared User PK (UUID) used by
+    assignment ViewSets. Create is invite/signup only — this serializer
+    is list/retrieve/PATCH.
+    """
+
+    email = serializers.EmailField(source='user.email', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+
+    class Meta:
+        model = SchoolMembership
+        fields = (
+            'id',
+            'user',
+            'email',
+            'first_name',
+            'last_name',
+            'role',
+            'is_active',
+            'joined_at',
+        )
+        read_only_fields = (
+            'id',
+            'user',
+            'email',
+            'first_name',
+            'last_name',
+            'joined_at',
+        )
+
+    def validate(self, attrs):
+        if self.instance is not None and would_remove_last_active_admin(
+            self.instance,
+            new_role=attrs.get('role'),
+            new_is_active=attrs.get('is_active'),
+        ):
+            raise serializers.ValidationError(LAST_ADMIN_MESSAGE)
+        return attrs
+
 
 class StaffInviteCreateSerializer(serializers.Serializer):
     email = serializers.EmailField()

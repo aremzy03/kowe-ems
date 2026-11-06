@@ -9,7 +9,10 @@ from finance.views import (
     MyInvoicesView,
     RecordManualPaymentView,
     SchoolPaymentAccountView,
+    StaffInvoiceDetailView,
     StaffInvoiceListView,
+    StaffPaymentDetailView,
+    StaffPaymentListView,
     VerifyPaymentView,
 )
 
@@ -26,6 +29,11 @@ urlpatterns = [
         'invoices/generate/',
         InvoiceGenerateView.as_view(),
         name='finance-invoice-generate',
+    ),
+    path(
+        'invoices/<uuid:pk>/',
+        StaffInvoiceDetailView.as_view(),
+        name='finance-invoice-detail',
     ),
     path(
         'invoices/',
@@ -51,6 +59,16 @@ urlpatterns = [
         'payments/manual/',
         RecordManualPaymentView.as_view(),
         name='finance-payment-manual',
+    ),
+    path(
+        'payments/<uuid:pk>/',
+        StaffPaymentDetailView.as_view(),
+        name='finance-payment-detail',
+    ),
+    path(
+        'payments/',
+        StaffPaymentListView.as_view(),
+        name='finance-payment-list',
     ),
     path(
         'dashboard/collections/',

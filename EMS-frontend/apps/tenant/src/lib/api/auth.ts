@@ -9,6 +9,19 @@ import {
   type SchoolRole,
 } from "@/lib/auth/token-store";
 
+export type MeResponse = {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: SchoolRole | null;
+  membership_id: string | null;
+  is_active: boolean;
+  tenant_schema: string;
+  tenant_slug: string | null;
+  school_name: string | null;
+};
+
 export type LoginResponse = {
   access?: string;
   role?: SchoolRole;
@@ -16,7 +29,17 @@ export type LoginResponse = {
   pre_auth_token?: string;
   enrollment_required?: boolean;
   csrfToken?: string;
+  me?: MeResponse;
 };
+
+export function displayNameFromMe(me: MeResponse): string {
+  const full = `${me.first_name ?? ""} ${me.last_name ?? ""}`.trim();
+  return full || me.email || "User";
+}
+
+export function schoolNameFromMe(me: MeResponse): string {
+  return (me.school_name ?? "").trim() || "School";
+}
 
 /** In-app homes for school roles. Platform UI lives in apps/platform (absolute origin). */
 export type RoleHome = "/admin" | "/teacher" | "/bursar" | "/parent";
@@ -98,6 +121,13 @@ export async function confirmEnroll2fa(
     body: { totp_code, issue_tokens: true },
     auth: true,
     accessToken: preAuthToken,
+    scope: "tenant",
+  });
+}
+
+export async function me(): Promise<MeResponse> {
+  return apiFetch<MeResponse>("/api/auth/me/", {
+    auth: true,
     scope: "tenant",
   });
 }

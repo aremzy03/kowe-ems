@@ -39,6 +39,8 @@ export type ApiFetchOptions = {
   auth?: boolean;
   /** Platform client always omits X-Tenant-Slug; scope kept for shared patterns. */
   scope?: "platform";
+  /** Override Bearer token (e.g. pre_auth for 2FA enroll). */
+  accessToken?: string | null;
   skipRefresh?: boolean;
   signal?: AbortSignal;
   headers?: Record<string, string>;
@@ -105,6 +107,7 @@ export async function apiFetch<T = unknown>(
     method = "GET",
     body,
     auth = false,
+    accessToken,
     skipRefresh = false,
     signal,
     headers: extra,
@@ -130,9 +133,10 @@ export async function apiFetch<T = unknown>(
     Object.assign(headers, await csrfHeaders());
   }
 
-  if (auth) {
-    const token = getAccessToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+  const bearer =
+    accessToken !== undefined ? accessToken : auth ? getAccessToken() : null;
+  if (bearer) {
+    headers.Authorization = `Bearer ${bearer}`;
   }
 
   const res = await fetch(url, {
@@ -167,7 +171,12 @@ export async function apiFetch<T = unknown>(
     throw new ApiRequestError({ status: res.status, data, detail });
   }
 
-  if (res.status === 401 && auth && !skipRefresh) {
+  if (
+    res.status === 401 &&
+    auth &&
+    !skipRefresh &&
+    accessToken === undefined
+  ) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
       return apiFetch<T>(path, { ...options, skipRefresh: true });

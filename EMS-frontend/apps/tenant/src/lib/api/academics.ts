@@ -38,6 +38,46 @@ export type Term = {
 export type ClassLevel = { id: string; name: string; order?: number };
 export type Arm = { id: string; name: string; class_level: string };
 export type Subject = { id: string; name: string; code?: string };
+export type GuardianRelationship = "mother" | "father" | "guardian";
+
+export type Guardian = {
+  id: string;
+  full_name: string;
+  phone_number: string;
+  relationship_to_student: GuardianRelationship;
+  user: string | null;
+  user_email?: string | null;
+};
+
+export type StudentGuardianLink = {
+  id: string;
+  student: string;
+  student_name?: string;
+  guardian: string;
+  guardian_full_name?: string;
+  guardian_phone_number?: string;
+  relationship_to_student?: GuardianRelationship;
+  user_email?: string | null;
+  is_primary_contact: boolean;
+};
+
+export type StudentGuardianLinkNested = {
+  id: string;
+  guardian: string;
+  guardian_full_name?: string;
+  guardian_phone_number?: string;
+  relationship_to_student?: GuardianRelationship;
+  user_email?: string | null;
+  is_primary_contact: boolean;
+};
+
+export type GuardianWrite = {
+  full_name?: string;
+  phone_number?: string;
+  relationship_to_student?: GuardianRelationship;
+  is_primary_contact?: boolean;
+};
+
 export type Student = {
   id: string;
   first_name?: string;
@@ -48,7 +88,10 @@ export type Student = {
   admission_date?: string;
   full_name?: string;
   linking_code?: string | null;
+  guardian_links?: StudentGuardianLinkNested[];
 };
+export type EnrollmentStatus = "active" | "withdrawn" | "graduated";
+
 export type Enrollment = {
   id: string;
   student: string;
@@ -62,7 +105,7 @@ export type Enrollment = {
   arm_name?: string;
   session?: string;
   session_name?: string;
-  status?: string;
+  status?: EnrollmentStatus | string;
 };
 export type ClassSubjectAssignment = {
   id: string;
@@ -139,6 +182,17 @@ export const academicsApi = {
         body,
         auth: true,
       }),
+    update: (id: string, body: Partial<ClassLevel>) =>
+      apiFetch<ClassLevel>(`/api/academics/class-levels/${id}/`, {
+        method: "PATCH",
+        body,
+        auth: true,
+      }),
+    remove: (id: string) =>
+      apiFetch(`/api/academics/class-levels/${id}/`, {
+        method: "DELETE",
+        auth: true,
+      }),
   },
   arms: {
     list: () => listResource<Arm>("/api/academics/arms/"),
@@ -146,6 +200,17 @@ export const academicsApi = {
       apiFetch<Arm>("/api/academics/arms/", {
         method: "POST",
         body,
+        auth: true,
+      }),
+    update: (id: string, body: Partial<Arm>) =>
+      apiFetch<Arm>(`/api/academics/arms/${id}/`, {
+        method: "PATCH",
+        body,
+        auth: true,
+      }),
+    remove: (id: string) =>
+      apiFetch(`/api/academics/arms/${id}/`, {
+        method: "DELETE",
         auth: true,
       }),
   },
@@ -157,13 +222,92 @@ export const academicsApi = {
         body,
         auth: true,
       }),
+    update: (id: string, body: Partial<Subject>) =>
+      apiFetch<Subject>(`/api/academics/subjects/${id}/`, {
+        method: "PATCH",
+        body,
+        auth: true,
+      }),
+    remove: (id: string) =>
+      apiFetch(`/api/academics/subjects/${id}/`, {
+        method: "DELETE",
+        auth: true,
+      }),
   },
   students: {
     list: () => listResource<Student>("/api/academics/students/"),
-    create: (body: Partial<Student>) =>
+    get: (id: string) =>
+      apiFetch<Student>(`/api/academics/students/${id}/`, { auth: true }),
+    create: (body: Partial<Student> & { guardian?: GuardianWrite }) =>
       apiFetch<Student>("/api/academics/students/", {
         method: "POST",
         body,
+        auth: true,
+      }),
+    update: (id: string, body: Partial<Student>) =>
+      apiFetch<Student>(`/api/academics/students/${id}/`, {
+        method: "PATCH",
+        body,
+        auth: true,
+      }),
+    remove: (id: string) =>
+      apiFetch(`/api/academics/students/${id}/`, {
+        method: "DELETE",
+        auth: true,
+      }),
+    regenerateLinkingCode: (id: string) =>
+      apiFetch<Student>(`/api/academics/students/${id}/regenerate-linking-code/`, {
+        method: "POST",
+        body: {},
+        auth: true,
+      }),
+  },
+  guardians: {
+    list: () => listResource<Guardian>("/api/academics/guardians/"),
+    get: (id: string) =>
+      apiFetch<Guardian>(`/api/academics/guardians/${id}/`, { auth: true }),
+    create: (body: GuardianWrite) =>
+      apiFetch<Guardian>("/api/academics/guardians/", {
+        method: "POST",
+        body,
+        auth: true,
+      }),
+    update: (id: string, body: Partial<GuardianWrite>) =>
+      apiFetch<Guardian>(`/api/academics/guardians/${id}/`, {
+        method: "PATCH",
+        body,
+        auth: true,
+      }),
+  },
+  guardianLinks: {
+    list: (params?: { student?: string; guardian?: string }) => {
+      const search = new URLSearchParams();
+      if (params?.student) search.set("student", params.student);
+      if (params?.guardian) search.set("guardian", params.guardian);
+      const qs = search.toString();
+      return listResource<StudentGuardianLink>(
+        qs ? `/api/academics/guardian-links/?${qs}` : "/api/academics/guardian-links/",
+      );
+    },
+    create: (body: {
+      student: string;
+      guardian: string;
+      is_primary_contact?: boolean;
+    }) =>
+      apiFetch<StudentGuardianLink>("/api/academics/guardian-links/", {
+        method: "POST",
+        body,
+        auth: true,
+      }),
+    update: (id: string, body: { is_primary_contact: boolean }) =>
+      apiFetch<StudentGuardianLink>(`/api/academics/guardian-links/${id}/`, {
+        method: "PATCH",
+        body,
+        auth: true,
+      }),
+    remove: (id: string) =>
+      apiFetch(`/api/academics/guardian-links/${id}/`, {
+        method: "DELETE",
         auth: true,
       }),
   },
@@ -173,6 +317,17 @@ export const academicsApi = {
       apiFetch<Enrollment>("/api/academics/enrollments/", {
         method: "POST",
         body,
+        auth: true,
+      }),
+    update: (id: string, body: Partial<Enrollment>) =>
+      apiFetch<Enrollment>(`/api/academics/enrollments/${id}/`, {
+        method: "PATCH",
+        body,
+        auth: true,
+      }),
+    remove: (id: string) =>
+      apiFetch(`/api/academics/enrollments/${id}/`, {
+        method: "DELETE",
         auth: true,
       }),
   },

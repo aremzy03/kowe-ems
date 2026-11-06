@@ -62,6 +62,25 @@ function classLabel(row: AttendanceOverviewClass): string {
   return [row.class_level_name, row.arm_name].filter(Boolean).join(" ") || "—";
 }
 
+function countPhrase(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+/** Pending mark-entry fact, or null when the register is clear. */
+export function attendancePencilNote(
+  data?: AttendanceOverviewData | null,
+): string | null {
+  const summary = data?.summary;
+  if (!summary) return null;
+  if (data?.mode === "date" && (summary.pending ?? 0) > 0) {
+    return `${countPhrase(summary.pending ?? 0, "class is", "classes are")} still unmarked today.`;
+  }
+  if ((summary.never_marked ?? 0) > 0) {
+    return `${countPhrase(summary.never_marked ?? 0, "class has", "classes have")} no attendance marks this term.`;
+  }
+  return null;
+}
+
 export function AttendanceOverview({
   data,
   isLoading,
@@ -136,7 +155,7 @@ export function AttendanceOverview({
         )}
       </div>
 
-      <Card>
+      <Card ledger>
         <CardBody className="p-0">
           <Table className="border-0 shadow-none">
             <THead>

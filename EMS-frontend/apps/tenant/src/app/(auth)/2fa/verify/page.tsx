@@ -64,7 +64,7 @@ function TwoFaVerifyForm() {
       const data = await verify2fa(preAuth, code);
       if (data.access && data.role) {
         applyAuthSuccess(data);
-        setSession(data.access, data.role);
+        setSession(data.access, data.role, data.me);
         navigateAfterAuth(data.role, router);
         return;
       }

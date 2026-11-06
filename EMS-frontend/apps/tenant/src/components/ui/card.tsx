@@ -8,6 +8,8 @@ export type CardProps = HTMLAttributes<HTMLDivElement> & {
   accentTop?: CardAccentTop;
   /** Neo-brutalist lift — auth, empty states only */
   raised?: boolean;
+  /** Interior coral margin. One working sheet per view. */
+  ledger?: boolean;
   children: ReactNode;
 };
 
@@ -22,19 +24,27 @@ export function Card({
   className,
   accentTop,
   raised,
+  ledger,
   children,
   ...props
 }: CardProps) {
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-nb-sm)] border border-ink bg-paper-card",
+        "relative rounded-[var(--radius-nb-sm)] border border-ink bg-paper-card",
         raised && "rounded-[var(--radius-nb-lg)] border-[3px] shadow-nb-lg",
         accentTop && cn("border-t", accentTopClasses[accentTop]),
+        ledger && "pl-12 sm:pl-16",
         className,
       )}
       {...props}
     >
+      {ledger ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-8 w-[1.5px] bg-accent-2/45 sm:left-12"
+        />
+      ) : null}
       {children}
     </div>
   );
@@ -45,7 +55,13 @@ export function CardHeader({
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("border-b border-ink/15 px-5 py-4", className)} {...props} />
+    <div
+      className={cn(
+        "border-b-[1.5px] border-dashed border-rule px-5 py-4",
+        className,
+      )}
+      {...props}
+    />
   );
 }
 

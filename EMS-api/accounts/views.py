@@ -1,9 +1,11 @@
-"""JWT cookie auth views: login, refresh, logout, verify, and TOTP 2FA."""
+"""JWT cookie auth views: login, refresh, logout, verify, TOTP 2FA, and me."""
 
 from django.conf import settings
+from django.db import connection
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django_tenants.utils import get_public_schema_name
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -23,9 +25,11 @@ from accounts.serializers import (
     TwoFactorEnrollConfirmSerializer,
     TwoFactorVerifySerializer,
     build_enroll_payload,
+    serialize_me,
 )
 from accounts.throttles import AuthEndpointThrottle
-from accounts.two_factor import request_uses_pre_2fa_token
+from accounts.two_factor import request_uses_pre_2fa_token, resolve_login_membership
+from memberships.permissions import resolve_request_membership
 
 
 class CsrfProtectedAPIMixin:
@@ -121,12 +125,15 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             )
 
         refresh = data.pop('refresh', None)
+        membership = resolve_login_membership(serializer.user)
         # Keep access + role/requires_2fa flags; drop anything else SimpleJWT added.
+        # ``me`` is also on GET /api/auth/me/ — the shell source of truth after refresh.
         body = {
             'access': data['access'],
             'requires_2fa': False,
             'role': data.get('role'),
             'csrfToken': _csrf_token_for_client(request),
+            'me': serialize_me(serializer.user, membership),
         }
         response = Response(body, status=status.HTTP_200_OK)
         if refresh:
@@ -213,6 +220,7 @@ class TwoFactorVerifyView(APIView):
                 'requires_2fa': False,
                 'role': membership.role,
                 'detail': 'Two-factor authentication successful.',
+                'me': serialize_me(serializer.validated_data['user'], membership),
             },
         )
 
@@ -258,6 +266,7 @@ class TwoFactorEnrollConfirmView(APIView):
                     'enrollment_complete': True,
                     'role': membership.role,
                     'detail': 'Two-factor authentication enrolled.',
+                    'me': serialize_me(request.user, membership),
                 },
             )
         return Response(
@@ -267,4 +276,36 @@ class TwoFactorEnrollConfirmView(APIView):
                 'used_pre_2fa_token': request_uses_pre_2fa_token(request),
             },
             status=status.HTTP_200_OK,
+        )
+
+
+_NO_MEMBERSHIP_DETAIL = 'Active membership at this school is required.'
+
+
+class CurrentUserView(APIView):
+    """
+    GET /api/auth/me/
+
+    Authenticated caller plus the current tenant's school name. Any active
+    school role (admin / teacher / bursar / parent) — not admin-only and not
+    2FA-gated. Platform operators on the public schema get identity without
+    a school membership.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        membership = resolve_request_membership(request)
+        if membership is not None:
+            return Response(serialize_me(request.user, membership))
+
+        if (
+            getattr(request.user, 'is_platform_admin', False)
+            and connection.schema_name == get_public_schema_name()
+        ):
+            return Response(serialize_me(request.user, None))
+
+        return Response(
+            {'detail': _NO_MEMBERSHIP_DETAIL},
+            status=status.HTTP_403_FORBIDDEN,
         )

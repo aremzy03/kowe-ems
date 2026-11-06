@@ -6,6 +6,7 @@ from accounts.views import (
     CookieTokenRefreshView,
     CookieTokenVerifyView,
     CsrfTokenView,
+    CurrentUserView,
     TwoFactorEnrollConfirmView,
     TwoFactorEnrollView,
     TwoFactorVerifyView,
@@ -13,6 +14,7 @@ from accounts.views import (
 
 urlpatterns = [
     path('csrf/', CsrfTokenView.as_view(), name='auth-csrf'),
+    path('me/', CurrentUserView.as_view(), name='auth-me'),
     path('login/', CookieTokenObtainPairView.as_view(), name='auth-login'),
     path('refresh/', CookieTokenRefreshView.as_view(), name='auth-refresh'),
     path('logout/', CookieTokenLogoutView.as_view(), name='auth-logout'),

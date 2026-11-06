@@ -1,0 +1,54 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a>
+  &rsaquo; <a href="{{ changelist_url }}">School memberships</a>
+  &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <form method="post">
+    {% csrf_token %}
+    {% if membership %}
+    <fieldset class="module aligned">
+      <div class="form-row">
+        <div>
+          <label>School:</label>
+          <div class="readonly">{{ membership.school_name }} ({{ membership.schema_name }})</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>User:</label>
+          <div class="readonly">{{ membership.email }}</div>
+        </div>
+      </div>
+    </fieldset>
+    {% endif %}
+    <fieldset class="module aligned">
+      {% for field in form %}
+      <div class="form-row{% if field.errors %} errors{% endif %}">
+        {{ field.errors }}
+        <div>
+          {{ field.label_tag }}
+          {{ field }}
+          {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% if form.non_field_errors %}
+      <p class="errornote">{{ form.non_field_errors }}</p>
+      {% endif %}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" value="Save" class="default" name="_save">
+      {% if membership %}
+      <input type="submit" value="Remove from school" name="_delete">
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

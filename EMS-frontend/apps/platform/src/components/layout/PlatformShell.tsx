@@ -25,7 +25,7 @@ const PLATFORM_NAV = [
 
 export function PlatformShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { accessToken, role, ready } = useAuth();
+  const { accessToken, role, ready, displayName } = useAuth();
 
   useEffect(() => {
     if (!ready) return;
@@ -48,12 +48,15 @@ export function PlatformShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-paper text-ink">
+    <div className="min-h-screen text-ink">
       <header className="border-b border-ink/15 bg-paper">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 md:px-8">
           <KoweMark size={28} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-ink/80">Platform</p>
+            {displayName ? (
+              <p className="truncate text-xs text-ink/60">{displayName}</p>
+            ) : null}
           </div>
           <nav className="flex flex-wrap gap-1" aria-label="Platform">
             {PLATFORM_NAV.map((item) => {

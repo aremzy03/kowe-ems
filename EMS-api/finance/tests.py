@@ -30,6 +30,9 @@ Money-safety invariants proven here:
     verify_and_apply_payment)
   * staff invoice list is admin/bursar only, stays in the current tenant
     schema, and can filter by term and class level
+  * staff invoice retrieve nests payments; pending Paystack is not paid
+  * staff payment list/retrieve is admin/bursar only; filters invoice /
+    status / term; successful payments cannot be deleted over HTTP
   * PlatformTransactionLog is written only inside verify_and_apply_payment
     after Paystack SUCCESS (webhook and return-flow share that write);
     manual recordings never write it
@@ -664,6 +667,7 @@ class ParentInvoiceAccessTests(FinanceInvoicingTestCase):
         self.assertEqual(invoice['outstanding_amount'], '157500.50')
         self.assertEqual(invoice['status'], 'unpaid')
         self.assertEqual(len(invoice['line_items']), 3)
+        self.assertEqual(invoice['payments'], [])
 
     def test_unlinked_parent_gets_empty_list(self):
         self._make_fees()
@@ -681,6 +685,45 @@ class ParentInvoiceAccessTests(FinanceInvoicingTestCase):
             self.assertEqual(
                 response.status_code, status.HTTP_403_FORBIDDEN, user.email
             )
+
+    def test_nested_payments_do_not_count_pending_as_paid(self):
+        from finance.models import Invoice, Payment
+        from finance.services import record_manual_payment
+
+        self._make_fees()
+        self._generate(self.admin)
+        invoice = Invoice.objects.get(student=self.students[0])
+        Payment.objects.create(
+            invoice=invoice,
+            amount=Decimal('157500.50'),
+            reference='pay_parent_pending',
+            status=Payment.Status.PENDING,
+            gateway=Payment.Gateway.PAYSTACK,
+            initiated_by=self.parent,
+        )
+        record_manual_payment(
+            invoice=invoice,
+            amount=Decimal('50000.00'),
+            method='cash',
+            recorded_by=self.bursar,
+        )
+
+        self.api.force_authenticate(user=self.parent)
+        response = self.api.get(MY_INVOICES_URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        row = response.data['results'][0]
+        self.assertEqual(row['status'], 'partially_paid')
+        self.assertEqual(row['amount_paid'], '50000.00')
+        self.assertEqual(row['outstanding_amount'], '107500.50')
+        statuses = {p['status'] for p in row['payments']}
+        self.assertEqual(statuses, {'pending', 'success'})
+        pending = next(p for p in row['payments'] if p['status'] == 'pending')
+        self.assertEqual(pending['gateway'], 'paystack')
+        self.assertEqual(pending['amount'], '157500.50')
+        self.assertIsNone(pending['paid_at'])
+        success = next(p for p in row['payments'] if p['status'] == 'success')
+        self.assertEqual(success['gateway'], 'manual')
+        self.assertEqual(success['recorded_by_email'], self.bursar.email)
 
 
 class StaffInvoiceListTests(FinanceInvoicingTestCase):
@@ -828,6 +871,261 @@ class StaffInvoiceListTests(FinanceInvoicingTestCase):
         self.assertEqual(term.status_code, status.HTTP_404_NOT_FOUND)
         klass = self._list(self.admin, class_level=missing)
         self.assertEqual(klass.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class StaffInvoiceRetrieveTests(FinanceInvoicingTestCase):
+    """GET /api/finance/invoices/{id}/ — nested payments, SUCCESS-only balances."""
+
+    def setUp(self):
+        super().setUp()
+        self._make_fees()
+        self._generate(self.admin)
+        from finance.models import Invoice
+
+        self.invoice = Invoice.objects.get(student=self.students[0])
+
+    def _get(self, user, pk=None):
+        self.api.force_authenticate(user=user)
+        invoice_id = pk or self.invoice.id
+        return self.api.get(f'{INVOICES_URL}{invoice_id}/')
+
+    def test_admin_and_bursar_retrieve_with_nested_payments(self):
+        from finance.models import Payment
+        from finance.services import record_manual_payment
+
+        Payment.objects.create(
+            invoice=self.invoice,
+            amount=Decimal('157500.50'),
+            reference='pay_retrieve_pending',
+            status=Payment.Status.PENDING,
+            gateway=Payment.Gateway.PAYSTACK,
+            initiated_by=self.parent,
+        )
+        record_manual_payment(
+            invoice=self.invoice,
+            amount=Decimal('50000.00'),
+            method='cash',
+            recorded_by=self.bursar,
+            notes='Window cash',
+        )
+
+        for user in (self.admin, self.bursar):
+            response = self._get(user)
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+            self.assertEqual(response.data['id'], str(self.invoice.id))
+            self.assertEqual(response.data['student_name'], 'Last0, First0')
+            self.assertEqual(response.data['admission_number'], 'ADM-000')
+            self.assertEqual(response.data['total_amount'], '157500.50')
+            self.assertEqual(response.data['amount_paid'], '50000.00')
+            self.assertEqual(response.data['outstanding_amount'], '107500.50')
+            self.assertEqual(response.data['status'], 'partially_paid')
+            self.assertEqual(len(response.data['line_items']), 3)
+            self.assertEqual(len(response.data['payments']), 2)
+            by_status = {p['status']: p for p in response.data['payments']}
+            self.assertEqual(by_status['pending']['gateway'], 'paystack')
+            self.assertEqual(by_status['pending']['amount'], '157500.50')
+            self.assertIsNone(by_status['pending']['paid_at'])
+            self.assertEqual(by_status['pending']['initiated_by_email'], self.parent.email)
+            self.assertEqual(by_status['success']['gateway'], 'manual')
+            self.assertEqual(by_status['success']['method'], 'cash')
+            self.assertEqual(by_status['success']['notes'], 'Window cash')
+            self.assertEqual(by_status['success']['recorded_by_email'], self.bursar.email)
+            self.assertIsNotNone(by_status['success']['paid_at'])
+
+    def test_parent_and_teacher_cannot_retrieve(self):
+        for user in (self.parent, self.teacher):
+            response = self._get(user)
+            self.assertEqual(
+                response.status_code, status.HTTP_403_FORBIDDEN, user.email
+            )
+
+    def test_unknown_invoice_is_404(self):
+        import uuid
+
+        response = self._get(self.bursar, pk=uuid.uuid4())
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+PAYMENTS_URL = '/api/finance/payments/'
+
+
+class StaffPaymentLedgerTests(FinanceInvoicingTestCase):
+    """GET /api/finance/payments/ and retrieve — bursar ledger, read-only."""
+
+    def setUp(self):
+        super().setUp()
+        from datetime import date
+
+        from academics.models import Term
+        from finance.models import Invoice, Payment
+        from finance.services import record_manual_payment
+
+        self._make_fees()
+        self._generate(self.admin)
+        self.invoice = Invoice.objects.get(student=self.students[0])
+        self.other_invoice = Invoice.objects.get(student=self.students[1])
+
+        self.pending = Payment.objects.create(
+            invoice=self.invoice,
+            amount=Decimal('20000.00'),
+            reference='pay_ledger_pending',
+            status=Payment.Status.PENDING,
+            gateway=Payment.Gateway.PAYSTACK,
+            initiated_by=self.parent,
+        )
+        self.failed = Payment.objects.create(
+            invoice=self.invoice,
+            amount=Decimal('10000.00'),
+            reference='pay_ledger_failed',
+            status=Payment.Status.FAILED,
+            gateway=Payment.Gateway.PAYSTACK,
+            initiated_by=self.parent,
+        )
+        self.cash = record_manual_payment(
+            invoice=self.invoice,
+            amount=Decimal('50000.00'),
+            method='cash',
+            recorded_by=self.bursar,
+        )
+        self.other_cash = record_manual_payment(
+            invoice=self.other_invoice,
+            amount=Decimal('150000.00'),
+            method='bank_transfer',
+            recorded_by=self.admin,
+        )
+
+        self.second_term = Term.objects.create(
+            session=self.session,
+            name=Term.Name.SECOND,
+            start_date=date(2027, 1, 11),
+            end_date=date(2027, 4, 10),
+            is_active=False,
+        )
+        self.second_invoice = Invoice.objects.create(
+            student=self.students[0],
+            term=self.second_term,
+            total_amount=Decimal('1000.00'),
+            status=Invoice.Status.UNPAID,
+        )
+        self.second_cash = record_manual_payment(
+            invoice=self.second_invoice,
+            amount=Decimal('1000.00'),
+            method='cash',
+            recorded_by=self.bursar,
+        )
+
+    def _list(self, user, **params):
+        self.api.force_authenticate(user=user)
+        return self.api.get(PAYMENTS_URL, params)
+
+    def test_admin_and_bursar_see_ledger_rows(self):
+        for user in (self.admin, self.bursar):
+            response = self._list(user)
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+            self.assertEqual(response.data['count'], 5)
+            self.assertEqual(len(response.data['results']), 5)
+            by_ref = {row['reference']: row for row in response.data['results']}
+            pending = by_ref['pay_ledger_pending']
+            self.assertEqual(pending['status'], 'pending')
+            self.assertEqual(pending['gateway'], 'paystack')
+            self.assertEqual(pending['amount'], '20000.00')
+            self.assertEqual(pending['student_name'], 'Last0, First0')
+            self.assertEqual(pending['admission_number'], 'ADM-000')
+            self.assertEqual(str(pending['invoice']), str(self.invoice.id))
+            self.assertEqual(str(pending['student']), str(self.students[0].id))
+            self.assertEqual(pending['initiated_by_email'], self.parent.email)
+            self.assertIsNone(pending['recorded_by'])
+            cash = by_ref[self.cash.reference]
+            self.assertEqual(cash['status'], 'success')
+            self.assertEqual(cash['gateway'], 'manual')
+            self.assertEqual(cash['method'], 'cash')
+            self.assertEqual(cash['recorded_by_email'], self.bursar.email)
+            self.assertIsNotNone(cash['paid_at'])
+
+    def test_filter_by_invoice_status_and_term(self):
+        by_invoice = self._list(self.bursar, invoice=str(self.invoice.id))
+        self.assertEqual(by_invoice.status_code, status.HTTP_200_OK, by_invoice.data)
+        self.assertEqual(by_invoice.data['count'], 3)
+        self.assertTrue(
+            all(
+                str(row['invoice']) == str(self.invoice.id)
+                for row in by_invoice.data['results']
+            )
+        )
+
+        success = self._list(self.admin, status='success')
+        self.assertEqual(success.data['count'], 3)
+        self.assertTrue(
+            all(row['status'] == 'success' for row in success.data['results'])
+        )
+
+        pending = self._list(self.bursar, status='pending')
+        self.assertEqual(pending.data['count'], 1)
+        self.assertEqual(pending.data['results'][0]['reference'], 'pay_ledger_pending')
+
+        by_term = self._list(self.admin, term=str(self.second_term.id))
+        self.assertEqual(by_term.data['count'], 1)
+        self.assertEqual(
+            str(by_term.data['results'][0]['id']), str(self.second_cash.id)
+        )
+
+        combined = self._list(
+            self.bursar,
+            invoice=str(self.invoice.id),
+            status='failed',
+        )
+        self.assertEqual(combined.data['count'], 1)
+        self.assertEqual(combined.data['results'][0]['reference'], 'pay_ledger_failed')
+
+    def test_unknown_invoice_or_term_is_404_invalid_status_is_400(self):
+        import uuid
+
+        missing = str(uuid.uuid4())
+        invoice = self._list(self.bursar, invoice=missing)
+        self.assertEqual(invoice.status_code, status.HTTP_404_NOT_FOUND)
+        term = self._list(self.admin, term=missing)
+        self.assertEqual(term.status_code, status.HTTP_404_NOT_FOUND)
+        bad_status = self._list(self.bursar, status='paid')
+        self.assertEqual(bad_status.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_retrieve_one_payment(self):
+        self.api.force_authenticate(user=self.bursar)
+        response = self.api.get(f'{PAYMENTS_URL}{self.cash.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data['id'], str(self.cash.id))
+        self.assertEqual(response.data['amount'], '50000.00')
+        self.assertEqual(response.data['gateway'], 'manual')
+        self.assertEqual(response.data['student_name'], 'Last0, First0')
+        self.assertEqual(response.data['recorded_by_email'], self.bursar.email)
+
+    def test_successful_payment_cannot_be_deleted(self):
+        self.api.force_authenticate(user=self.admin)
+        listed = self.api.delete(PAYMENTS_URL)
+        self.assertEqual(listed.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        detail = self.api.delete(f'{PAYMENTS_URL}{self.cash.id}/')
+        self.assertEqual(detail.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        from finance.models import Payment
+
+        self.assertTrue(Payment.objects.filter(pk=self.cash.id).exists())
+
+    def test_parent_and_teacher_cannot_list_or_retrieve(self):
+        for user in (self.parent, self.teacher):
+            listed = self._list(user)
+            self.assertEqual(
+                listed.status_code, status.HTTP_403_FORBIDDEN, user.email
+            )
+            self.api.force_authenticate(user=user)
+            detail = self.api.get(f'{PAYMENTS_URL}{self.cash.id}/')
+            self.assertEqual(
+                detail.status_code, status.HTTP_403_FORBIDDEN, user.email
+            )
+
+    def test_unknown_payment_is_404(self):
+        import uuid
+
+        self.api.force_authenticate(user=self.bursar)
+        response = self.api.get(f'{PAYMENTS_URL}{uuid.uuid4()}/')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 # ---------------------------------------------------------------------------

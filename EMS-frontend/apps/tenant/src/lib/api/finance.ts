@@ -23,6 +23,29 @@ export type InvoiceLineItem = {
   amount?: string;
 };
 
+export type Payment = {
+  id: string;
+  invoice?: string;
+  student?: string;
+  student_name?: string;
+  admission_number?: string;
+  term?: string;
+  term_name?: string;
+  session_name?: string;
+  amount: string;
+  reference: string;
+  status: string;
+  gateway: string;
+  method?: string | null;
+  initiated_by?: string | null;
+  initiated_by_email?: string | null;
+  recorded_by?: string | null;
+  recorded_by_email?: string | null;
+  notes?: string;
+  paid_at?: string | null;
+  created_at?: string;
+};
+
 export type Invoice = {
   id: string;
   student?: string;
@@ -38,6 +61,7 @@ export type Invoice = {
   status?: string;
   reference?: string;
   line_items?: InvoiceLineItem[];
+  payments?: Payment[];
   created_at?: string;
 };
 
@@ -51,9 +75,20 @@ export const financeApi = {
       return unwrapList(data);
     },
     create: (body: unknown) =>
-      apiFetch("/api/finance/fee-structures/", {
+      apiFetch<FeeStructure>("/api/finance/fee-structures/", {
         method: "POST",
         body,
+        auth: true,
+      }),
+    update: (id: string, body: Partial<FeeStructure>) =>
+      apiFetch<FeeStructure>(`/api/finance/fee-structures/${id}/`, {
+        method: "PATCH",
+        body,
+        auth: true,
+      }),
+    remove: (id: string) =>
+      apiFetch(`/api/finance/fee-structures/${id}/`, {
+        method: "DELETE",
         auth: true,
       }),
   },
@@ -83,6 +118,26 @@ export const financeApi = {
     );
     return unwrapList(data);
   },
+  getInvoice: (id: string) =>
+    apiFetch<Invoice>(`/api/finance/invoices/${id}/`, { auth: true }),
+  listPayments: async (params?: {
+    invoice?: string;
+    status?: string;
+    term?: string;
+  }) => {
+    const search = new URLSearchParams();
+    if (params?.invoice) search.set("invoice", params.invoice);
+    if (params?.status) search.set("status", params.status);
+    if (params?.term) search.set("term", params.term);
+    const qs = search.toString();
+    const data = await apiFetch<Paginated<Payment> | Payment[]>(
+      `/api/finance/payments/${qs ? `?${qs}` : ""}`,
+      { auth: true },
+    );
+    return unwrapList(data);
+  },
+  getPayment: (id: string) =>
+    apiFetch<Payment>(`/api/finance/payments/${id}/`, { auth: true }),
   myInvoices: async () => {
     const data = await apiFetch<Paginated<Invoice> | Invoice[]>(
       "/api/finance/my-invoices/",

@@ -35,6 +35,70 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'email', 'first_name', 'last_name')
 
 
+def serialize_me(user, membership=None) -> dict:
+    """
+    Current user + school (or platform) context for GET /api/auth/me/.
+
+    Reuses ``UserSerializer`` for identity fields. Tenant comes from the
+    same ``connection.tenant`` the rest of the API uses (HeaderTenantMiddleware).
+    """
+    from django.db import connection
+    from django_tenants.utils import get_public_schema_name
+
+    from platform_admin.tenancy import tenant_slug_for
+
+    payload = dict(UserSerializer(user).data)
+    public = connection.schema_name == get_public_schema_name()
+    tenant = getattr(connection, 'tenant', None)
+
+    if membership is not None:
+        payload['role'] = membership.role
+        payload['membership_id'] = membership.pk
+        payload['is_active'] = membership.is_active
+    elif getattr(user, 'is_platform_admin', False) and public:
+        payload['role'] = 'platform_admin'
+        payload['membership_id'] = None
+        payload['is_active'] = True
+    else:
+        payload['role'] = None
+        payload['membership_id'] = None
+        payload['is_active'] = False
+
+    payload['tenant_schema'] = connection.schema_name
+    if public:
+        payload['tenant_slug'] = None
+        payload['school_name'] = None
+        return payload
+
+    if tenant is not None and hasattr(tenant, 'domains'):
+        payload['tenant_slug'] = tenant_slug_for(tenant)
+    else:
+        payload['tenant_slug'] = connection.schema_name.replace('_', '-')
+    payload['school_name'] = getattr(tenant, 'school_name', None) or None
+    return payload
+
+
+class MeSerializer(UserSerializer):
+    """Documented shape of GET /api/auth/me/ (identity + tenant context)."""
+
+    role = serializers.CharField(read_only=True, allow_null=True)
+    membership_id = serializers.UUIDField(read_only=True, allow_null=True)
+    is_active = serializers.BooleanField(read_only=True)
+    tenant_schema = serializers.CharField(read_only=True)
+    tenant_slug = serializers.CharField(read_only=True, allow_null=True)
+    school_name = serializers.CharField(read_only=True, allow_null=True)
+
+    class Meta(UserSerializer.Meta):
+        fields = UserSerializer.Meta.fields + (
+            'role',
+            'membership_id',
+            'is_active',
+            'tenant_schema',
+            'tenant_slug',
+            'school_name',
+        )
+
+
 class EMSTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
     Password login with optional tenant-aware 2FA gating.

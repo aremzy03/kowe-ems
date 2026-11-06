@@ -48,6 +48,8 @@ export type CollectionsDashboardProps = {
   error?: Error | unknown | null;
   /** When true, skip the outer empty/loading wrappers used by full pages. */
   compact?: boolean;
+  /** Coral margin on the class ledger. One sheet per view. */
+  ledger?: boolean;
 };
 
 function moneyNumber(value?: string | number): number {
@@ -60,11 +62,33 @@ function rateLabel(value?: string | number): string {
   return `${n.toFixed(2)}%`;
 }
 
+function countPhrase(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+/** Outstanding-fee fact, or null when nothing is unpaid. */
+export function collectionsPencilNote(
+  data?: CollectionsDashboardData | null,
+): string | null {
+  if (!data) return null;
+  const unpaid = data.unpaid_count ?? 0;
+  const outstanding = moneyNumber(data.outstanding_total);
+  if (outstanding <= 0 && unpaid <= 0) return null;
+  if (outstanding > 0 && unpaid > 0) {
+    return `${formatNaira(outstanding)} is still outstanding on ${countPhrase(unpaid, "unpaid invoice", "unpaid invoices")}.`;
+  }
+  if (outstanding > 0) {
+    return `${formatNaira(outstanding)} is still outstanding this term.`;
+  }
+  return `${countPhrase(unpaid, "unpaid invoice remains", "unpaid invoices remain")} this term.`;
+}
+
 export function CollectionsDashboard({
   data,
   isLoading,
   error,
   compact = false,
+  ledger = false,
 }: CollectionsDashboardProps) {
   if (isLoading) {
     return <p className="text-sm text-ink/70">Loading collections…</p>;
@@ -110,14 +134,18 @@ export function CollectionsDashboard({
         <KpiCard
           label="Collected"
           value={formatNaira(moneyNumber(data.collected_total))}
+          tone="green"
         />
         <KpiCard
           label="Outstanding"
           value={formatNaira(moneyNumber(data.outstanding_total))}
+          tone="coral"
         />
         <KpiCard
           label="Collection rate"
           value={rateLabel(data.collection_rate)}
+          rate={moneyNumber(data.collection_rate)}
+          rateTone="green"
         />
         <KpiCard
           label="Invoices"
@@ -126,7 +154,7 @@ export function CollectionsDashboard({
         />
       </div>
 
-      <Card>
+      <Card ledger={ledger}>
         <CardBody className="p-0">
           <Table className="border-0 shadow-none">
             <THead>

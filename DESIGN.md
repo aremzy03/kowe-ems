@@ -19,13 +19,18 @@ Colors stay. Intensity moved.
 |---|---|---|
 | `--color-ink` | `#211F26` | Text, hairline rules, neo-brutalist shadows |
 | `--color-paper` | `#FBF6EC` | Page and sidebar field — warm cream |
-| `--color-paper-tint` | `#F3EBDA` | Active nav wash, nested well |
-| `--color-paper-card` | `#FFFFFB` | Card surface — a shade lighter so the sheet sits on the desk |
+| `--color-paper-tint` | `#F3EBDA` | Active nav wash |
+| `--color-paper-card` | `#F7F1E4` | Card stock — warm sheet, lighter than the desk |
+| `--color-kraft` | `#EAE3D2` | Table headers and nested wells |
+| `--color-paper-field` | `#FFFDF9` | Inputs — unwritten paper, lighter than the card |
 | `--color-accent-1` | `#5B3DE8` | Primary CTA fill, focus ring |
-| `--color-accent-2` | `#FF7A45` | Fee-due emphasis, secondary highlight |
-| `--color-success` | `#1C9C7C` | Paid, present, approved |
+| `--color-accent-2` | `#FF7A45` | Fee-due fill and hatch |
+| `--color-accent-2-ink` | `#9A4030` | Coral numeral. Same hue, dark enough for text |
+| `--color-success` | `#1C9C7C` | Paid, present, approved fill and hatch |
+| `--color-success-ink` | `#0E6E54` | Green numeral. Same hue, dark enough for text |
 | `--color-warning` | `#F5A623` | Pending, partial, awaiting review |
 | `--color-danger` | `#E14B4B` | Overdue, absent, rejected |
+| `--color-rule` | `#D8D2C5` | Pencil guideline inside a sheet — row rules and dashed card headers |
 
 - Color is categorical, never gradient.
 - Status is never color alone — badge = color + label.
@@ -35,8 +40,10 @@ Colors stay. Intensity moved.
 
 | Token | Value | Use |
 |---|---|---|
-| `--border-hairline` | `1px solid var(--color-ink)` | Cards, sidebar, topbar, tables, inputs — default operating chrome |
+| `--border-hairline` | `1px solid var(--color-ink)` | Cards, sidebar, topbar, table frames, inputs — default operating chrome |
 | `--border-thin` | `1.5px solid var(--color-ink)` | Dense table header rules |
+| `--border-rule` | `1px solid var(--color-rule)` | Table body rows, interior guidelines |
+| `--border-perforation` | `1.5px dashed var(--color-rule)` | Card headers |
 | `--border` | `2px solid var(--color-ink)` | Buttons, badges, auth inputs |
 | `--border-thick` | `3px solid var(--color-ink)` | Auth cards, empty states, modals |
 
@@ -69,8 +76,8 @@ Slightly cut-paper, never pills, never 0.
 |---|---|---|
 | Heading | Space Grotesk (600/700) | Page titles, card titles, nav labels |
 | Body | Inter (400/500) | UI copy, table cells, labels — generous line-height |
-| Mono | JetBrains Mono (400/700) | Admission numbers, ₦, linking codes, timestamps |
-| Accent | Kalam (400/600) | Signature lines, empty-state asides only |
+| Mono | JetBrains Mono (400/700) | Admission numbers, ₦, linking codes, timestamps, KPI labels, badge stamps |
+| Accent | Kalam (400/600) | Signature lines, empty-state asides, and one pinned operational aside per dashboard |
 
 Page titles in the **content column** (not a second H1 in the topbar). Scale is product-tight: title ~1.75–2rem, not a marketing display.
 
@@ -119,6 +126,26 @@ Source of truth: `kowe_brand_assets/kowe-logo-kit/` (see `KOWE-logo-guidelines.m
 - Clear space: ½ tile height around every lockup.
 - Never retype the wordmark in a UI font; Operate chrome is **symbol + school/platform label only**.
 - Don’t place full-colour logo on Coral; don’t stretch or recolour outside the palette.
+
+## 11. Pencil marks
+
+Borrowed from a pencil-on-paper study, then held to this system. These are interior marks on the flat sheet. They do not add a font, a palette, a shadow, or a new shell.
+
+**Guideline.** Outer frames stay hairline ink. Inside a sheet, table body rows use `--color-rule`. Card headers use the dashed perforation. Header cells keep the 1.5px ink rule.
+
+**One coral margin.** A single working sheet per view — the attendance register, or the collections ledger when that ledger is the page's sheet — carries an interior vertical rule: 1.5px `--color-accent-2` at 45% opacity, 2rem from the left edge (3rem from `sm` up). Text sits to its right. KPI tiles, the sidebar, and a second table on the same view do not get a margin.
+
+**Mono stamps.** KPI labels and badge text are JetBrains Mono, 11px, uppercase, tracking `0.06em`. The KPI value stays Space Grotesk. Badges keep the ink border and hard shadow. The fill is a pencil wash of the status hue (green, yellow, red, indigo) with ink text. Solid fill stays on primary buttons.
+
+**Paper field.** The page background is cream, ruled with a 1px `--color-rule` line every 24px, plus a fixed fiber noise at low opacity. Sidebar, top bar, and cards are opaque, so the ruling shows in the margins. Cards use `--color-paper-card`. Table headers use `--color-kraft`. Inputs use `--color-paper-field`.
+
+**Status numerals.** Outstanding and overdue values use `--color-accent-2-ink`. Collected, present, and paid values use `--color-success-ink`. Every other figure stays ink. The label still names the metric.
+
+**Rate bar.** Where the API already returns a rate (collection rate, attendance rate), the tile draws one flat hatch bar in that hue. The percentage text stays ink. No bar stands in for a count.
+
+**One aside.** When the loaded data names a real pending fact (outstanding fees, unmarked classes, days absent), the page shows one line in italic Kalam, ink on `--color-paper-card`, with a 3px coral left rule. No tape, no second aside on the same view. Empty states keep their own Kalam line.
+
+**A mark, only with a series.** A KPI draws a dotted ink stroke, last point in coral, only when the API returns a trend. One attendance chart may use a 45° graphite hatch on flat paper; the peak bar is coral. No chart stands in for a number that has no series. The chart card has no offset shadow.
 
 ---
 

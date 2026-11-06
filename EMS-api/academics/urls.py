@@ -7,12 +7,14 @@ from academics.views import (
     ClassSubjectAssignmentViewSet,
     ClassTeacherAssignmentViewSet,
     EnrollmentViewSet,
+    GuardianViewSet,
     LinkingCodeRedeemView,
     MyClassSubjectAssignmentsView,
     MyClassTeacherAssignmentsView,
     MyStudentsPlaceholderView,
     ParentStudentAccessExampleView,
     SessionViewSet,
+    StudentGuardianLinkViewSet,
     StudentViewSet,
     SubjectViewSet,
     TermViewSet,
@@ -25,6 +27,12 @@ router.register('class-levels', ClassLevelViewSet, basename='class-level')
 router.register('arms', ArmViewSet, basename='arm')
 router.register('subjects', SubjectViewSet, basename='subject')
 router.register('students', StudentViewSet, basename='student')
+router.register('guardians', GuardianViewSet, basename='guardian')
+router.register(
+    'guardian-links',
+    StudentGuardianLinkViewSet,
+    basename='guardian-link',
+)
 router.register('enrollments', EnrollmentViewSet, basename='enrollment')
 router.register(
     'class-subject-assignments',

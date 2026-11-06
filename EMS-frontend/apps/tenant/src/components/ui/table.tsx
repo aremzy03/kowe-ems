@@ -18,7 +18,10 @@ export function THead({
 }: HTMLAttributes<HTMLTableSectionElement>) {
   return (
     <thead
-      className={cn("bg-paper-tint [&_th]:border-b [&_th]:border-ink/20", className)}
+      className={cn(
+        "bg-kraft [&_th]:border-b-[1.5px] [&_th]:border-solid [&_th]:border-ink",
+        className,
+      )}
       {...props}
     />
   );
@@ -28,7 +31,15 @@ export function TBody({
   className,
   ...props
 }: HTMLAttributes<HTMLTableSectionElement>) {
-  return <tbody className={cn("[&_tr:hover]:bg-ink/[0.03]", className)} {...props} />;
+  return (
+    <tbody
+      className={cn(
+        "[&_tr]:border-b [&_tr]:border-rule [&_tr:last-child]:border-b-0 [&_tr:hover]:bg-ink/[0.03]",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export function TR({
@@ -36,10 +47,7 @@ export function TR({
   ...props
 }: HTMLAttributes<HTMLTableRowElement>) {
   return (
-    <tr
-      className={cn("border-b border-ink/15 last:border-b-0", className)}
-      {...props}
-    />
+    <tr className={className} {...props} />
   );
 }
 

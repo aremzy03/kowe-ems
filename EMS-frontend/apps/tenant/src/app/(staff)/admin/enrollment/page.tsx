@@ -17,14 +17,28 @@ import {
   THead,
   TR,
 } from "@/components/ui";
+import { ConfirmDeleteModal } from "@/components/ui/client";
 import {
   academicsApi,
+  type Enrollment,
+  type EnrollmentStatus,
   type Session,
   type Student,
   type Term,
 } from "@/lib/api/academics";
-import { ApiRequestError } from "@/lib/api/client";
-import { mapDrfErrors } from "@/lib/api/errors";
+import { formatApiError } from "@/lib/api/errors";
+
+const ENROLLMENT_STATUSES: { value: EnrollmentStatus; label: string }[] = [
+  { value: "active", label: "Active" },
+  { value: "withdrawn", label: "Withdrawn" },
+  { value: "graduated", label: "Graduated" },
+];
+
+function enrollmentLabel(row: Enrollment) {
+  const who = row.student_name || "this enrollment";
+  const when = [row.session_name, row.term_name].filter(Boolean).join(" · ");
+  return when ? `${who} (${when})` : who;
+}
 
 function studentLabel(s: Student) {
   const name =
@@ -72,6 +86,7 @@ export default function AdminEnrollmentPage() {
   const [classLevel, setClassLevel] = useState("");
   const [arm, setArm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Enrollment | null>(null);
 
   const termsForSession = useMemo(
     () =>
@@ -106,11 +121,32 @@ export default function AdminEnrollmentPage() {
       void qc.invalidateQueries({ queryKey: ["academics", "enrollments"] });
     },
     onError: (err) => {
-      setError(
-        err instanceof ApiRequestError
-          ? mapDrfErrors(err.data).form ?? err.message
-          : "Failed",
-      );
+      setError(formatApiError(err, "Could not enroll student"));
+    },
+  });
+
+  const updateStatus = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: EnrollmentStatus }) =>
+      academicsApi.enrollments.update(id, { status }),
+    onSuccess: () => {
+      setError(null);
+      void qc.invalidateQueries({ queryKey: ["academics", "enrollments"] });
+    },
+    onError: (err) => {
+      setError(formatApiError(err, "Could not update enrollment"));
+    },
+  });
+
+  const removeEnrollment = useMutation({
+    mutationFn: (id: string) => academicsApi.enrollments.remove(id),
+    onSuccess: () => {
+      setPendingDelete(null);
+      setError(null);
+      void qc.invalidateQueries({ queryKey: ["academics", "enrollments"] });
+    },
+    onError: (err) => {
+      setPendingDelete(null);
+      setError(formatApiError(err, "Could not delete enrollment"));
     },
   });
 
@@ -278,38 +314,88 @@ export default function AdminEnrollmentPage() {
                   <TH>Session / term</TH>
                   <TH>Class</TH>
                   <TH>Arm</TH>
+                  <TH>Status</TH>
+                  <TH>Actions</TH>
                 </TR>
               </THead>
               <TBody>
-                {(enrollments.data ?? []).map((e) => (
-                  <TR key={e.id}>
-                    <TD>
-                      <span className="font-medium">
-                        {e.student_name ?? "—"}
-                      </span>
-                      {e.student_admission_number ? (
-                        <span
-                          className="mt-0.5 block text-xs text-ink/65"
-                          style={{ fontFamily: "var(--font-mono)" }}
-                        >
-                          {e.student_admission_number}
+                {(enrollments.data ?? []).map((e) => {
+                  const status = (e.status || "active") as EnrollmentStatus;
+                  const known = ENROLLMENT_STATUSES.some((s) => s.value === status);
+                  return (
+                    <TR key={e.id}>
+                      <TD>
+                        <span className="font-medium">
+                          {e.student_name ?? "—"}
                         </span>
-                      ) : null}
-                    </TD>
-                    <TD>
-                      {[e.session_name, e.term_name]
-                        .filter(Boolean)
-                        .join(" · ") || "—"}
-                    </TD>
-                    <TD>{e.class_level_name ?? "—"}</TD>
-                    <TD>{e.arm_name ?? "—"}</TD>
-                  </TR>
-                ))}
+                        {e.student_admission_number ? (
+                          <span
+                            className="mt-0.5 block text-xs text-ink/65"
+                            style={{ fontFamily: "var(--font-mono)" }}
+                          >
+                            {e.student_admission_number}
+                          </span>
+                        ) : null}
+                      </TD>
+                      <TD>
+                        {[e.session_name, e.term_name]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      </TD>
+                      <TD>{e.class_level_name ?? "—"}</TD>
+                      <TD>{e.arm_name ?? "—"}</TD>
+                      <TD>
+                        <Select
+                          aria-label={`Status for ${e.student_name ?? "enrollment"}`}
+                          value={known ? status : "active"}
+                          disabled={updateStatus.isPending || removeEnrollment.isPending}
+                          onChange={(ev) =>
+                            updateStatus.mutate({
+                              id: e.id,
+                              status: ev.target.value as EnrollmentStatus,
+                            })
+                          }
+                        >
+                          {ENROLLMENT_STATUSES.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </TD>
+                      <TD>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={removeEnrollment.isPending}
+                          onClick={() => setPendingDelete(e)}
+                        >
+                          Delete
+                        </Button>
+                      </TD>
+                    </TR>
+                  );
+                })}
               </TBody>
             </Table>
           )}
         </CardBody>
       </Card>
+
+      <ConfirmDeleteModal
+        open={Boolean(pendingDelete)}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) removeEnrollment.mutate(pendingDelete.id);
+        }}
+        title={
+          pendingDelete
+            ? `Delete enrollment for ${enrollmentLabel(pendingDelete)}?`
+            : "Delete enrollment?"
+        }
+        description="This removes the placement. Prefer withdraw or graduate if the student left the class but the record should stay."
+        pending={removeEnrollment.isPending}
+      />
     </div>
   );
 }

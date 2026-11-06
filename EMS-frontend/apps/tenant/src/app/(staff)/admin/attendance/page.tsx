@@ -3,9 +3,10 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   AttendanceOverview,
+  attendancePencilNote,
   type AttendanceOverviewData,
 } from "@/components/attendance/AttendanceOverview";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader, PencilAside } from "@/components/ui";
 import { attendanceApi } from "@/lib/api/attendance";
 import { academicsApi } from "@/lib/api/academics";
 
@@ -24,6 +25,8 @@ export default function AdminAttendancePage() {
     enabled: Boolean(termId),
   });
 
+  const note = attendancePencilNote(overview.data);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -37,11 +40,14 @@ export default function AdminAttendancePage() {
           body="Create an academic term before viewing attendance overview."
         />
       ) : (
-        <AttendanceOverview
-          data={overview.data}
-          isLoading={terms.isLoading || overview.isLoading}
-          error={overview.error}
-        />
+        <>
+          {note ? <PencilAside>{note}</PencilAside> : null}
+          <AttendanceOverview
+            data={overview.data}
+            isLoading={terms.isLoading || overview.isLoading}
+            error={overview.error}
+          />
+        </>
       )}
     </div>
   );

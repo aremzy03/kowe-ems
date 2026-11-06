@@ -49,7 +49,10 @@ const icons: Record<string, { d: string; viewBox?: string }> = {
   home: {
     d: "M4 11.5L12 5l8 6.5V20H4v-8.5zM10 20v-6h4v6",
   },
-};
+  notifications: {
+    d: "M4 7h16l-8 6L4 7zm0 0v10h16V7",
+  },
+}
 
 function iconKeyForHref(href: string): keyof typeof icons {
   if (href.endsWith("/academics")) return "academics";
@@ -63,6 +66,7 @@ function iconKeyForHref(href: string): keyof typeof icons {
   if (href.endsWith("/components")) return "components";
   if (href.endsWith("/broadsheet")) return "broadsheet";
   if (href.endsWith("/remarks")) return "remarks";
+  if (href.endsWith("/notifications")) return "notifications";
   if (href.includes("/invoices")) return "invoices";
   if (href.includes("/payments")) return "payments";
   if (href.includes("payment-account")) return "account";

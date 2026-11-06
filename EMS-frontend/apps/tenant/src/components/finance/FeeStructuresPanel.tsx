@@ -18,10 +18,10 @@ import {
   THead,
   TR,
 } from "@/components/ui";
+import { ConfirmDeleteModal, Modal } from "@/components/ui/client";
 import { academicsApi } from "@/lib/api/academics";
-import { financeApi } from "@/lib/api/finance";
-import { ApiRequestError } from "@/lib/api/client";
-import { mapDrfErrors } from "@/lib/api/errors";
+import { financeApi, type FeeStructure } from "@/lib/api/finance";
+import { formatApiError } from "@/lib/api/errors";
 
 function moneyAmount(value?: string): number {
   const parsed = Number(value ?? 0);
@@ -69,6 +69,13 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
   const [classLevel, setClassLevel] = useState("");
   const [term, setTerm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<FeeStructure | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editClassLevel, setEditClassLevel] = useState("");
+  const [editTerm, setEditTerm] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<FeeStructure | null>(null);
 
   const create = useMutation({
     mutationFn: () =>
@@ -87,11 +94,52 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
       void qc.invalidateQueries({ queryKey: ["finance", "fee-structures"] });
     },
     onError: (err) => {
-      setError(
-        err instanceof ApiRequestError
-          ? mapDrfErrors(err.data).form ?? err.message
-          : "Failed",
-      );
+      setError(formatApiError(err, "Could not create fee structure"));
+    },
+  });
+
+  function startEdit(fs: FeeStructure) {
+    setEditing(fs);
+    setEditName(fs.name);
+    setEditAmount(fs.amount);
+    setEditClassLevel(fs.class_level);
+    setEditTerm(fs.term);
+    setEditError(null);
+  }
+
+  function closeEdit() {
+    setEditing(null);
+    setEditError(null);
+  }
+
+  const update = useMutation({
+    mutationFn: (id: string) =>
+      financeApi.feeStructures.update(id, {
+        name: editName.trim(),
+        amount: editAmount,
+        class_level: editClassLevel,
+        term: editTerm,
+      }),
+    onSuccess: () => {
+      closeEdit();
+      setError(null);
+      void qc.invalidateQueries({ queryKey: ["finance", "fee-structures"] });
+    },
+    onError: (err) => {
+      setEditError(formatApiError(err, "Could not update fee structure"));
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => financeApi.feeStructures.remove(id),
+    onSuccess: () => {
+      setPendingDelete(null);
+      setError(null);
+      void qc.invalidateQueries({ queryKey: ["finance", "fee-structures"] });
+    },
+    onError: (err) => {
+      setPendingDelete(null);
+      setError(formatApiError(err, "Could not delete fee structure"));
     },
   });
 
@@ -200,6 +248,7 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
                   <TH>Class</TH>
                   <TH>Term</TH>
                   <TH>Amount</TH>
+                  <TH>Actions</TH>
                 </TR>
               </THead>
               <TBody>
@@ -215,6 +264,26 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
                     <TD style={{ fontFamily: "var(--font-mono)" }}>
                       <Money amount={moneyAmount(fs.amount)} />
                     </TD>
+                    <TD>
+                      <span className="inline-flex flex-wrap gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={update.isPending || remove.isPending}
+                          onClick={() => startEdit(fs)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={remove.isPending}
+                          onClick={() => setPendingDelete(fs)}
+                        >
+                          Delete
+                        </Button>
+                      </span>
+                    </TD>
                   </TR>
                 ))}
               </TBody>
@@ -222,6 +291,101 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
           )}
         </CardBody>
       </Card>
+
+      <Modal
+        open={Boolean(editing)}
+        onClose={closeEdit}
+        title={editing ? `Edit ${editing.name}` : "Edit fee structure"}
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={closeEdit}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={
+                update.isPending ||
+                !editName.trim() ||
+                !editAmount ||
+                !editClassLevel ||
+                !editTerm
+              }
+              onClick={() => {
+                if (editing) update.mutate(editing.id);
+              }}
+            >
+              {update.isPending ? "Saving…" : "Save"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <div>
+            <Label htmlFor="edit-fs-name">Name</Label>
+            <Input
+              id="edit-fs-name"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-fs-amount">Amount (₦)</Label>
+            <Input
+              id="edit-fs-amount"
+              value={editAmount}
+              onChange={(e) => setEditAmount(e.target.value)}
+              inputMode="decimal"
+              style={{ fontFamily: "var(--font-mono)" }}
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-fs-class">Class level</Label>
+            <Select
+              id="edit-fs-class"
+              value={editClassLevel}
+              onChange={(e) => setEditClassLevel(e.target.value)}
+            >
+              <option value="">Choose class</option>
+              {(classLevels.data ?? []).map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="edit-fs-term">Term</Label>
+            <Select
+              id="edit-fs-term"
+              value={editTerm}
+              onChange={(e) => setEditTerm(e.target.value)}
+            >
+              <option value="">Choose term</option>
+              {(terms.data ?? []).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {termOptionLabel(t, sessions.data ?? [])}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {editError ? <p className="text-sm text-danger">{editError}</p> : null}
+        </div>
+      </Modal>
+
+      <ConfirmDeleteModal
+        open={Boolean(pendingDelete)}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) remove.mutate(pendingDelete.id);
+        }}
+        title={
+          pendingDelete
+            ? `Delete ${pendingDelete.name}?`
+            : "Delete fee structure?"
+        }
+        description="Fee structures referenced by issued invoices cannot be deleted."
+        pending={remove.isPending}
+      />
     </div>
   );
 }

@@ -153,6 +153,19 @@ class AssessmentComponentViewSet(viewsets.ModelViewSet):
     serializer_class = AssessmentComponentSerializer
     permission_classes = [IsSchoolAdmin]
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        subject = self.request.query_params.get('subject')
+        class_level = self.request.query_params.get('class_level')
+        term = self.request.query_params.get('term')
+        if subject:
+            qs = qs.filter(subject_id=subject)
+        if class_level:
+            qs = qs.filter(class_level_id=class_level)
+        if term:
+            qs = qs.filter(term_id=term)
+        return qs
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         remaining = scheme_weight_sum(

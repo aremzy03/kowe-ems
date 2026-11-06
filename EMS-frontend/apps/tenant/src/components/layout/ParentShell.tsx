@@ -50,7 +50,7 @@ export function ParentShell({ children }: ParentShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-paper text-ink">
+    <div className="flex min-h-screen flex-col text-ink">
       <header className="border-b border-ink/15 bg-paper">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 md:px-6">
           <KoweMark size={28} />

@@ -13,6 +13,8 @@ import {
   KpiCard,
   Label,
   PageHeader,
+  PencilAside,
+  PencilBars,
   Select,
   Table,
   TBody,
@@ -28,7 +30,7 @@ export default function UiDevPage() {
   const [modalOpen, setModalOpen] = useState(false);
 
   return (
-    <main className="min-h-screen bg-paper px-4 py-10 text-ink md:px-8">
+    <main className="min-h-screen px-4 py-10 text-ink md:px-8">
       <div className="mx-auto max-w-5xl space-y-12">
         <PageHeader
           title="UI primitives"
@@ -61,6 +63,8 @@ export default function UiDevPage() {
           </div>
         </section>
 
+        <PencilAside>₦480,000.00 is still outstanding on 23 unpaid invoices.</PencilAside>
+
         <section className="space-y-4">
           <h2 className="text-xl font-bold" style={{ fontFamily: "var(--font-heading)" }}>
             Cards & KPIs
@@ -70,19 +74,22 @@ export default function UiDevPage() {
               label="Fees collected"
               value="₦2.4M"
               delta="+12% vs last term"
-              accentTop="accent-1"
+              tone="green"
+              series={[1.8, 1.9, 2.1, 2.0, 2.4]}
             />
             <KpiCard
               label="Outstanding"
               value="₦480k"
               delta="23 invoices overdue"
-              accentTop="accent-2"
+              tone="coral"
             />
             <KpiCard
               label="Present today"
               value="312"
               delta="JSS 1A · 94%"
-              accentTop="warning"
+              tone="green"
+              rate={94}
+              rateTone="green"
             />
             <Card accentTop="danger">
               <CardHeader>
@@ -143,8 +150,31 @@ export default function UiDevPage() {
 
         <section className="space-y-4">
           <h2 className="text-xl font-bold" style={{ fontFamily: "var(--font-heading)" }}>
+            Weekday roll
+          </h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>JSS 1A this week</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <PencilBars
+                points={[
+                  { label: "Mon", value: 88, marked: 32 },
+                  { label: "Tue", value: 94, marked: 32 },
+                  { label: "Wed", value: 98, marked: 32 },
+                  { label: "Thu", value: 91, marked: 31 },
+                  { label: "Fri", value: 85, marked: 30 },
+                ]}
+              />
+            </CardBody>
+          </Card>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold" style={{ fontFamily: "var(--font-heading)" }}>
             Table
           </h2>
+          <Card ledger>
           <Table>
             <THead>
               <TR>
@@ -181,6 +211,7 @@ export default function UiDevPage() {
               </TR>
             </TBody>
           </Table>
+          </Card>
         </section>
 
         <section className="space-y-4">

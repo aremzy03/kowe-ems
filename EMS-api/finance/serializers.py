@@ -238,23 +238,82 @@ class RecordManualPaymentSerializer(serializers.Serializer):
     )
 
 
-class PaymentSerializer(serializers.ModelSerializer):
-    """Payment row: Paystack checkout or bursar-recorded cash/transfer."""
+class InvoiceNestedPaymentSerializer(serializers.ModelSerializer):
+    """
+    Thin payment row nested on invoice retrieve / parent my-invoices.
+
+    Status here is the payment's own status (pending / success / failed).
+    Invoice ``amount_paid`` / ``status`` still count SUCCESS rows only —
+    a pending Paystack checkout must not look like money received.
+    """
+
+    initiated_by_email = serializers.SerializerMethodField()
+    recorded_by_email = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
         fields = (
             'id',
-            'invoice',
             'amount',
             'reference',
             'status',
             'gateway',
             'method',
             'initiated_by',
+            'initiated_by_email',
             'recorded_by',
+            'recorded_by_email',
             'notes',
             'paid_at',
             'created_at',
         )
+        read_only_fields = fields
+
+    def get_initiated_by_email(self, obj):
+        user = obj.initiated_by
+        return user.email if user is not None else None
+
+    def get_recorded_by_email(self, obj):
+        user = obj.recorded_by
+        return user.email if user is not None else None
+
+
+class PaymentSerializer(InvoiceNestedPaymentSerializer):
+    """Staff ledger row: payment plus the student / term on its invoice."""
+
+    student = serializers.UUIDField(source='invoice.student_id', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    admission_number = serializers.CharField(
+        source='invoice.student.admission_number', read_only=True
+    )
+    term = serializers.UUIDField(source='invoice.term_id', read_only=True)
+    term_name = serializers.CharField(source='invoice.term.name', read_only=True)
+    session_name = serializers.CharField(
+        source='invoice.term.session.name', read_only=True
+    )
+
+    class Meta(InvoiceNestedPaymentSerializer.Meta):
+        fields = InvoiceNestedPaymentSerializer.Meta.fields + (
+            'invoice',
+            'student',
+            'student_name',
+            'admission_number',
+            'term',
+            'term_name',
+            'session_name',
+        )
+        read_only_fields = fields
+
+    def get_student_name(self, obj):
+        student = obj.invoice.student
+        return f'{student.last_name}, {student.first_name}'
+
+
+class InvoiceDetailSerializer(InvoiceSerializer):
+    """Invoice retrieve: itemized charges plus every related payment."""
+
+    payments = InvoiceNestedPaymentSerializer(many=True, read_only=True)
+
+    class Meta(InvoiceSerializer.Meta):
+        fields = InvoiceSerializer.Meta.fields + ('payments',)
         read_only_fields = fields

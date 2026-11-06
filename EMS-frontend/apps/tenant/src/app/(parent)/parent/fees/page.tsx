@@ -22,7 +22,11 @@ function feeVariant(status?: string): "success" | "warning" | "danger" | "info" 
 }
 
 function balanceOf(inv: Invoice): number {
-  const due = Number(inv.amount_due ?? 0);
+  if (inv.outstanding_amount != null && inv.outstanding_amount !== "") {
+    const remaining = Number(inv.outstanding_amount);
+    return Number.isFinite(remaining) ? Math.max(0, remaining) : 0;
+  }
+  const due = Number(inv.amount_due ?? inv.total_amount ?? 0);
   const paid = Number(inv.amount_paid ?? 0);
   return Math.max(0, due - paid);
 }
@@ -89,7 +93,9 @@ export default function ParentFeesPage() {
                       <div>
                         <p className="text-sm text-ink/70">Amount due</p>
                         <p className="font-semibold">
-                          <Money amount={Number(inv.amount_due ?? 0)} />
+                          <Money
+                            amount={Number(inv.total_amount ?? inv.amount_due ?? 0)}
+                          />
                         </p>
                         <p className="mt-1 text-sm text-ink/70">Balance</p>
                         <p className="text-lg font-bold">
@@ -102,6 +108,35 @@ export default function ParentFeesPage() {
                         </Link>
                       ) : null}
                     </div>
+                    {(inv.payments ?? []).length > 0 ? (
+                      <ul className="space-y-1 border-t border-ink/15 pt-3 text-sm">
+                        {(inv.payments ?? []).map((payment) => (
+                          <li
+                            key={payment.id}
+                            className="flex flex-wrap justify-between gap-2 text-ink/80"
+                          >
+                            <span>
+                              {payment.status === "success"
+                                ? "Paid"
+                                : payment.status === "pending"
+                                  ? "Pending"
+                                  : payment.status === "failed"
+                                    ? "Failed"
+                                    : payment.status}{" "}
+                              ·{" "}
+                              {payment.gateway === "manual"
+                                ? payment.method === "bank_transfer"
+                                  ? "Bank transfer"
+                                  : "Cash"
+                                : "Paystack"}
+                            </span>
+                            <span style={{ fontFamily: "var(--font-mono)" }}>
+                              <Money amount={Number(payment.amount ?? 0)} />
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </CardBody>
                 </Card>
               </li>

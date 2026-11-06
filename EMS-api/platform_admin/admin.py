@@ -6,6 +6,7 @@ from .models import Domain, PlatformTransactionLog, SubaccountTenantMap, Tenant,
 
 @admin.register(Tenant)
 class TenantAdmin(TenantAdminMixin, admin.ModelAdmin):
+    change_form_template = 'admin/platform_admin/tenant/change_form.html'
     list_display = ('school_name', 'schema_name', 'is_active', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('school_name', 'schema_name')

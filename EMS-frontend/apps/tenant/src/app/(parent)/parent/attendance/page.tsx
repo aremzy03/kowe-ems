@@ -5,15 +5,20 @@ import { AttendanceStatusBadge } from "@/components/attendance/AttendanceStatusB
 import {
   Card,
   CardBody,
+  CardHeader,
+  CardTitle,
   EmptyState,
   KpiCard,
   PageHeader,
+  PencilAside,
+  PencilBars,
   Table,
   TBody,
   TD,
   TH,
   THead,
   TR,
+  weekdayAttendanceRates,
 } from "@/components/ui";
 import { academicsApi } from "@/lib/api/academics";
 import { attendanceApi } from "@/lib/api/attendance";
@@ -75,6 +80,14 @@ export default function ParentAttendancePage() {
   const summaryData = summary.data as AttendanceSummary | undefined;
   const dailyData = daily.data as DailyPayload | undefined;
   const days = dailyData?.results ?? [];
+  const weekdayRates = weekdayAttendanceRates(days);
+  const absentDays = summaryData?.days_absent ?? 0;
+  const absentNote =
+    summaryData && summaryData.available !== false && absentDays > 0
+      ? absentDays === 1
+        ? "1 day absent this term."
+        : `${absentDays} days absent this term.`
+      : null;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4">
@@ -82,6 +95,8 @@ export default function ParentAttendancePage() {
         title="Attendance"
         description={`${selected.name} · term summary and daily log`}
       />
+
+      {absentNote ? <PencilAside>{absentNote}</PencilAside> : null}
 
       {summary.isLoading || terms.isLoading ? (
         <p className="text-sm text-ink/70">Loading summary…</p>
@@ -104,6 +119,7 @@ export default function ParentAttendancePage() {
           <KpiCard
             label="Present"
             value={String(summaryData.days_present ?? 0)}
+            tone="green"
           />
           <KpiCard
             label="Absent"
@@ -121,6 +137,12 @@ export default function ParentAttendancePage() {
                 ? `${summaryData.attendance_percentage}%`
                 : "—"
             }
+            rate={
+              summaryData.attendance_percentage != null
+                ? Number(String(summaryData.attendance_percentage).replace("%", ""))
+                : undefined
+            }
+            rateTone="green"
             delta={
               summaryData.total_school_days != null
                 ? `${summaryData.days_marked ?? 0} of ${summaryData.total_school_days} school days`
@@ -128,6 +150,17 @@ export default function ParentAttendancePage() {
             }
           />
         </div>
+      ) : null}
+
+      {weekdayRates ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Weekday roll</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <PencilBars points={weekdayRates} />
+          </CardBody>
+        </Card>
       ) : null}
 
       <section className="space-y-3">
@@ -146,7 +179,7 @@ export default function ParentAttendancePage() {
               : "Failed to load daily attendance"}
           </p>
         ) : (
-          <Card>
+          <Card ledger>
             <CardBody className="p-0">
               <Table className="border-0 shadow-none">
                 <THead>

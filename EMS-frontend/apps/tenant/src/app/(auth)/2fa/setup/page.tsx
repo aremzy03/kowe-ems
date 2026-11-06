@@ -72,7 +72,7 @@ export default function TwoFaSetupPage() {
       const data = await confirmEnroll2fa(preAuth, totp);
       if (data.access && data.role) {
         applyAuthSuccess(data);
-        setSession(data.access, data.role);
+        setSession(data.access, data.role, data.me);
         navigateAfterAuth(data.role, router);
         return;
       }

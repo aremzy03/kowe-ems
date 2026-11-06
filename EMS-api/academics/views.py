@@ -1,6 +1,12 @@
 """Academics API: admin CRUD + linking-code redemption + parent placeholders."""
 
+import uuid
+
+from django.db import transaction
+from django.db.models import ProtectedError
+from django.utils import timezone
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -11,8 +17,10 @@ from academics.models import (
     ClassSubjectAssignment,
     ClassTeacherAssignment,
     Enrollment,
+    Guardian,
     Session,
     Student,
+    StudentGuardianLink,
     Subject,
     Term,
 )
@@ -27,8 +35,11 @@ from academics.serializers import (
     ClassSubjectAssignmentSerializer,
     ClassTeacherAssignmentSerializer,
     EnrollmentSerializer,
+    GuardianSerializer,
     LinkingCodeRedeemSerializer,
     SessionSerializer,
+    StudentDetailSerializer,
+    StudentGuardianLinkSerializer,
     StudentSerializer,
     SubjectSerializer,
     TermSerializer,
@@ -49,7 +60,24 @@ from memberships.permissions import (
 # ---------------------------------------------------------------------------
 
 
-class SessionViewSet(viewsets.ModelViewSet):
+class ProtectedDestroyMixin:
+    """Map Django ProtectedError (PROTECT FKs) to 409 instead of a 500."""
+
+    protected_delete_detail = (
+        'This record is still referenced by other data and cannot be deleted.'
+    )
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {'detail': self.protected_delete_detail},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+
+class SessionViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     """
     Sessions: any school member may list/retrieve (term pickers need labels).
     Writes stay admin-only.
@@ -64,7 +92,7 @@ class SessionViewSet(viewsets.ModelViewSet):
         return [IsSchoolAdmin()]
 
 
-class TermViewSet(viewsets.ModelViewSet):
+class TermViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     """
     Terms: any school member may list/retrieve (parent results and attendance
     need the term id). Writes stay admin-only.
@@ -79,7 +107,7 @@ class TermViewSet(viewsets.ModelViewSet):
         return [IsSchoolAdmin()]
 
 
-class ClassLevelViewSet(viewsets.ModelViewSet):
+class ClassLevelViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     """
     Class levels: teachers and bursars may list/retrieve (marks / invoicing);
     writes are admin-only.
@@ -94,7 +122,7 @@ class ClassLevelViewSet(viewsets.ModelViewSet):
         return [IsSchoolAdmin()]
 
 
-class ArmViewSet(viewsets.ModelViewSet):
+class ArmViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     """
     Arms: teachers and bursars may list/retrieve; writes are admin-only.
     """
@@ -108,7 +136,7 @@ class ArmViewSet(viewsets.ModelViewSet):
         return [IsSchoolAdmin()]
 
 
-class SubjectViewSet(viewsets.ModelViewSet):
+class SubjectViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     """
     Subjects: teachers and bursars may list/retrieve; writes are admin-only.
     """
@@ -122,20 +150,131 @@ class SubjectViewSet(viewsets.ModelViewSet):
         return [IsSchoolAdmin()]
 
 
-class StudentViewSet(viewsets.ModelViewSet):
+class StudentViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     """
     Student CRUD — school admin only.
 
     Create uses ``create_with_linking_code`` (via StudentSerializer) and
     returns the generated unused linking code in the response body.
+
+    ``POST …/students/{id}/regenerate-linking-code/`` invalidates unused
+    codes for that student (``is_used=True``, ``used_by`` left null so it
+    is distinguishable from a parent redeem) and issues a new unused code
+    via ``Student.generate_unused_linking_code``.
     """
 
     queryset = Student.objects.prefetch_related('linking_codes').all()
     serializer_class = StudentSerializer
     permission_classes = [IsSchoolAdmin]
+    protected_delete_detail = (
+        'This student has invoices or other protected records and cannot be deleted.'
+    )
+
+    def get_serializer_class(self):
+        if self.action in ('retrieve', 'create', 'regenerate_linking_code'):
+            return StudentDetailSerializer
+        return StudentSerializer
+
+    def get_queryset(self):
+        qs = Student.objects.prefetch_related('linking_codes')
+        if self.action in ('retrieve', 'create', 'regenerate_linking_code'):
+            qs = qs.prefetch_related('guardian_links__guardian__user')
+        return qs
+
+    @action(detail=True, methods=['post'], url_path='regenerate-linking-code')
+    def regenerate_linking_code(self, request, pk=None):
+        student = self.get_object()
+        with transaction.atomic():
+            locked = Student.objects.select_for_update().get(pk=student.pk)
+            locked.linking_codes.filter(is_used=False).update(
+                is_used=True,
+                used_at=timezone.now(),
+            )
+            locked.generate_unused_linking_code()
+        refreshed = self.get_queryset().get(pk=student.pk)
+        serializer = self.get_serializer(refreshed)
+        return Response(serializer.data)
 
 
-class EnrollmentViewSet(viewsets.ModelViewSet):
+def _uuid_query_param(value):
+    """Return a UUID string, or None if missing/blank. False if invalid."""
+    if value is None or str(value).strip() == '':
+        return None
+    try:
+        return str(uuid.UUID(str(value).strip()))
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
+class GuardianViewSet(viewsets.ModelViewSet):
+    """
+    Guardian contact CRUD — school admin only.
+
+    Destroy is refused with 409 while any ``StudentGuardianLink`` exists.
+    The model FK is ``CASCADE``, so unlinking first is required to avoid
+    silently dropping parent↔student relationships. Unlinked rows may be
+    deleted; the parent ``User`` (if any) is left in the public schema.
+    """
+
+    queryset = Guardian.objects.select_related('user').all()
+    serializer_class = GuardianSerializer
+    permission_classes = [IsSchoolAdmin]
+    http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.student_links.exists():
+            return Response(
+                {
+                    'detail': (
+                        'This guardian is still linked to one or more students. '
+                        'Unlink them first, then delete.'
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+
+class StudentGuardianLinkViewSet(viewsets.ModelViewSet):
+    """
+    Link / unlink guardians and students — school admin only.
+
+    List accepts ``?student=<uuid>`` and ``?guardian=<uuid>``. PATCH may
+    set ``is_primary_contact``; promoting one link demotes the others for
+    that student.
+    """
+
+    queryset = StudentGuardianLink.objects.select_related(
+        'student',
+        'guardian',
+        'guardian__user',
+    ).all()
+    serializer_class = StudentGuardianLinkSerializer
+    permission_classes = [IsSchoolAdmin]
+    http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
+
+    def get_queryset(self):
+        qs = StudentGuardianLink.objects.select_related(
+            'student',
+            'guardian',
+            'guardian__user',
+        )
+        student_id = _uuid_query_param(self.request.query_params.get('student'))
+        if student_id is False:
+            return qs.none()
+        if student_id:
+            qs = qs.filter(student_id=student_id)
+
+        guardian_id = _uuid_query_param(self.request.query_params.get('guardian'))
+        if guardian_id is False:
+            return qs.none()
+        if guardian_id:
+            qs = qs.filter(guardian_id=guardian_id)
+        return qs
+
+
+class EnrollmentViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     """Enrollment CRUD — school admin only. Blocks duplicate active placements."""
 
     queryset = Enrollment.objects.select_related(

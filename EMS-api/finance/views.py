@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Exists, OuterRef, ProtectedError
+from django.db.models import Exists, OuterRef, Prefetch, ProtectedError
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,9 +13,11 @@ from finance.paystack import PaystackError
 from finance.serializers import (
     FeeStructureSerializer,
     InitializePaymentSerializer,
+    InvoiceDetailSerializer,
     InvoiceGenerateSerializer,
     InvoiceSerializer,
     PaymentAccountOnboardSerializer,
+    PaymentSerializer,
     RecordManualPaymentSerializer,
     SchoolPaymentAccountSerializer,
     VerifyPaymentSerializer,
@@ -34,6 +36,38 @@ from finance.services import (
     verify_and_apply_payment,
 )
 from memberships.permissions import IsAdminOrBursar, IsParent, IsSchoolAdmin
+
+
+def _invoice_payments_prefetch():
+    return Prefetch(
+        'payments',
+        queryset=Payment.objects.select_related(
+            'initiated_by',
+            'recorded_by',
+        ).order_by('-created_at'),
+    )
+
+
+def _staff_invoice_queryset(*, with_payments=False):
+    qs = (
+        Invoice.objects.select_related('student', 'term', 'term__session')
+        .prefetch_related('line_items__fee_structure')
+        .annotate(amount_paid_total=paid_amount_annotation())
+    )
+    if with_payments:
+        qs = qs.prefetch_related(_invoice_payments_prefetch())
+    return qs
+
+
+def _staff_payment_queryset():
+    return Payment.objects.select_related(
+        'invoice',
+        'invoice__student',
+        'invoice__term',
+        'invoice__term__session',
+        'initiated_by',
+        'recorded_by',
+    ).order_by('-created_at')
 
 
 class SchoolPaymentAccountView(APIView):
@@ -194,11 +228,7 @@ class StaffInvoiceListView(APIView):
     def get(self, request):
         from academics.models import ClassLevel, Term
 
-        qs = (
-            Invoice.objects.select_related('student', 'term', 'term__session')
-            .prefetch_related('line_items__fee_structure')
-            .annotate(amount_paid_total=paid_amount_annotation())
-        )
+        qs = _staff_invoice_queryset()
 
         term_id = (request.query_params.get('term') or '').strip()
         if term_id:
@@ -235,13 +265,36 @@ class StaffInvoiceListView(APIView):
         return Response({'count': len(data), 'results': data})
 
 
+class StaffInvoiceDetailView(APIView):
+    """
+    GET /api/finance/invoices/{id}/ — admin or bursar.
+
+    Same InvoiceSerializer fields as the list, plus nested ``payments``
+    (pending, success, and failed). Invoice ``status`` / ``amount_paid``
+    still count SUCCESS rows only.
+    """
+
+    permission_classes = [IsAdminOrBursar]
+
+    def get(self, request, pk):
+        try:
+            invoice = _staff_invoice_queryset(with_payments=True).get(pk=pk)
+        except (Invoice.DoesNotExist, ValueError, DjangoValidationError):
+            return Response(
+                {'detail': 'Not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(InvoiceDetailSerializer(invoice).data)
+
+
 class MyInvoicesView(APIView):
     """
     GET /api/finance/my-invoices/ — parent only.
 
-    Itemized invoices (with current payment status) for students the parent
-    is linked to via StudentGuardianLink. Parents with no links get an empty
-    list — no leakage of other students' billing.
+    Itemized invoices (with current payment status and nested payments) for
+    students the parent is linked to via StudentGuardianLink. Parents with
+    no links get an empty list — no leakage of other students' billing.
+    Invoice ``status`` / ``amount_paid`` still count SUCCESS rows only.
     """
 
     permission_classes = [IsParent]
@@ -254,11 +307,14 @@ class MyInvoicesView(APIView):
                 student_field='student_id',
             )
             .select_related('student', 'term', 'term__session')
-            .prefetch_related('line_items__fee_structure')
+            .prefetch_related(
+                'line_items__fee_structure',
+                _invoice_payments_prefetch(),
+            )
             .annotate(amount_paid_total=paid_amount_annotation())
             .order_by('-created_at')
         )
-        data = InvoiceSerializer(qs, many=True).data
+        data = InvoiceDetailSerializer(qs, many=True).data
         return Response({'count': len(data), 'results': data})
 
 
@@ -442,6 +498,73 @@ class RecordManualPaymentView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class StaffPaymentListView(APIView):
+    """
+    GET /api/finance/payments/ — admin or bursar.
+
+    Ledger of every payment in the current tenant schema (pending Paystack
+    checkouts included). Create stays on initialize / manual; there is no
+    DELETE. Optional ``?invoice=``, ``?status=``, ``?term=``.
+    """
+
+    permission_classes = [IsAdminOrBursar]
+
+    def get(self, request):
+        from academics.models import Term
+
+        qs = _staff_payment_queryset()
+
+        invoice_id = (request.query_params.get('invoice') or '').strip()
+        if invoice_id:
+            try:
+                invoice = Invoice.objects.get(pk=invoice_id)
+            except (Invoice.DoesNotExist, ValueError, DjangoValidationError):
+                return Response(
+                    {'detail': 'Invoice not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            qs = qs.filter(invoice=invoice)
+
+        payment_status = (request.query_params.get('status') or '').strip()
+        if payment_status:
+            if payment_status not in Payment.Status.values:
+                return Response(
+                    {'detail': 'Invalid status.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            qs = qs.filter(status=payment_status)
+
+        term_id = (request.query_params.get('term') or '').strip()
+        if term_id:
+            try:
+                term = Term.objects.get(pk=term_id)
+            except (Term.DoesNotExist, ValueError, DjangoValidationError):
+                return Response(
+                    {'detail': 'Term not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            qs = qs.filter(invoice__term=term)
+
+        data = PaymentSerializer(qs, many=True).data
+        return Response({'count': len(data), 'results': data})
+
+
+class StaffPaymentDetailView(APIView):
+    """GET /api/finance/payments/{id}/ — admin or bursar. Read-only."""
+
+    permission_classes = [IsAdminOrBursar]
+
+    def get(self, request, pk):
+        try:
+            payment = _staff_payment_queryset().get(pk=pk)
+        except (Payment.DoesNotExist, ValueError, DjangoValidationError):
+            return Response(
+                {'detail': 'Not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(PaymentSerializer(payment).data)
 
 
 def _money_as_api_string(value):

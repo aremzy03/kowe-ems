@@ -195,14 +195,22 @@ export default function BursarInvoicesPage() {
                         </Badge>
                       </TD>
                       <TD className="text-right">
-                        {balance > 0 ? (
+                        <div className="flex justify-end gap-3">
                           <Link
-                            href={`/bursar/payments/manual?invoice=${inv.id}`}
+                            href={`/bursar/invoices/${inv.id}`}
                             className="text-sm font-medium text-ink underline"
                           >
-                            Record
+                            View
                           </Link>
-                        ) : null}
+                          {balance > 0 ? (
+                            <Link
+                              href={`/bursar/payments/manual?invoice=${inv.id}`}
+                              className="text-sm font-medium text-ink underline"
+                            >
+                              Record
+                            </Link>
+                          ) : null}
+                        </div>
                       </TD>
                     </TR>
                   );

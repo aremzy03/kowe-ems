@@ -15,7 +15,9 @@ export { Badge, type BadgeProps, type BadgeVariant } from "./badge";
 export { Table, THead, TBody, TR, TH, TD } from "./table";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
 export { PageHeader, type PageHeaderProps } from "./page-header";
-export { KpiCard, type KpiCardProps } from "./kpi-card";
+export { KpiCard, type KpiCardProps, type KpiTone } from "./kpi-card";
+export { PencilAside, type PencilAsideProps } from "./pencil-aside";
+export { PencilBars, type PencilBar, type PencilBarsProps } from "./pencil-bars";
 export { Money, type MoneyProps } from "./money";
 
 // Client-only primitives (Modal, Toast) live in `@/components/ui/client`

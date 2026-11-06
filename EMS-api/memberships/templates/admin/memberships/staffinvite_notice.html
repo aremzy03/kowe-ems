@@ -1,0 +1,18 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a>
+  &rsaquo; Staff invites
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <p>
+    Invites are stored in each school and sent from the school app.
+    To attach someone and set their role, use
+    <a href="{{ membership_url }}">School memberships</a>.
+  </p>
+</div>
+{% endblock %}

@@ -7,8 +7,14 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AuthShell } from "@/components/layout/AuthShell";
 import { Button, Input, Label } from "@/components/ui";
-import { applyLogin, login } from "@/lib/api/auth";
+import {
+  applyAuthSuccess,
+  applyPreAuthChallenge,
+  isPlatformAdminRole,
+  login,
+} from "@/lib/api/auth";
 import { ApiRequestError } from "@/lib/api/client";
+import { mapDrfErrors } from "@/lib/api/errors";
 import { useAuth } from "@/lib/auth/auth-provider";
 
 const schema = z.object({
@@ -17,6 +23,9 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
+
+const SCHOOL_ACCOUNT_MESSAGE =
+  "This account is not a platform admin. Use the school subdomain UI.";
 
 export default function PlatformLoginPage() {
   const router = useRouter();
@@ -35,20 +44,29 @@ export default function PlatformLoginPage() {
     setFormError(null);
     try {
       const data = await login(values.email, values.password);
-      if (!data.access || data.role !== "platform_admin") {
-        setFormError(
-          data.role && data.role !== "platform_admin"
-            ? "This account is not a platform admin. Use the school subdomain UI."
-            : "Unexpected login response.",
-        );
+      if (data.requires_2fa && data.pre_auth_token) {
+        if (data.role && !isPlatformAdminRole(data.role)) {
+          setFormError(SCHOOL_ACCOUNT_MESSAGE);
+          return;
+        }
+        applyPreAuthChallenge(data);
+        router.push(data.enrollment_required ? "/2fa/setup" : "/2fa/verify");
         return;
       }
-      applyLogin(data);
-      setSession(data.access, data.role);
-      router.push("/");
+      if (data.access && isPlatformAdminRole(data.role)) {
+        applyAuthSuccess(data);
+        setSession(data.access, data.role, data.me);
+        router.push("/");
+        return;
+      }
+      setFormError(
+        data.role && !isPlatformAdminRole(data.role)
+          ? SCHOOL_ACCOUNT_MESSAGE
+          : "Unexpected login response.",
+      );
     } catch (err) {
       if (err instanceof ApiRequestError) {
-        setFormError(err.detail ?? err.message);
+        setFormError(mapDrfErrors(err.data).form ?? err.detail ?? err.message);
       } else {
         setFormError(err instanceof Error ? err.message : "Login failed");
       }

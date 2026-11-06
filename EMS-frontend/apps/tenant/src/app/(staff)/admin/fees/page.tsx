@@ -3,10 +3,11 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   CollectionsDashboard,
+  collectionsPencilNote,
   type CollectionsDashboardData,
 } from "@/components/finance/CollectionsDashboard";
 import { FeeStructuresPanel } from "@/components/finance/FeeStructuresPanel";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader, PencilAside } from "@/components/ui";
 import { academicsApi } from "@/lib/api/academics";
 import { financeApi } from "@/lib/api/finance";
 
@@ -22,6 +23,8 @@ export default function AdminFeesPage() {
       financeApi.collectionsDashboard(termId!) as Promise<CollectionsDashboardData>,
     enabled: Boolean(termId),
   });
+
+  const note = collectionsPencilNote(collections.data);
 
   return (
     <div className="space-y-8">
@@ -43,10 +46,12 @@ export default function AdminFeesPage() {
           >
             Collections
           </h2>
+          {note ? <PencilAside>{note}</PencilAside> : null}
           <CollectionsDashboard
             data={collections.data}
             isLoading={terms.isLoading || collections.isLoading}
             error={collections.error}
+            ledger
           />
         </section>
       )}

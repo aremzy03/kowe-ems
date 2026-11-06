@@ -1,0 +1,8 @@
+{% extends "admin/django_tenants/tenant/change_form.html" %}
+
+{% block object-tools-items %}
+{{ block.super }}
+<li>
+  <a href="{% url 'admin:memberships_schoolmembership_changelist' %}?schema={{ original.schema_name }}">Members</a>
+</li>
+{% endblock %}

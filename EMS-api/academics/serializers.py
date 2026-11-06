@@ -242,6 +242,197 @@ class StudentSerializer(serializers.ModelSerializer):
         return student
 
 
+# ---------------------------------------------------------------------------
+# Guardian + StudentGuardianLink (admin contact maintenance)
+# ---------------------------------------------------------------------------
+
+
+class GuardianSerializer(serializers.ModelSerializer):
+    """
+    Tenant-scoped guardian contact.
+
+    ``Guardian`` has no email column — parent email lives on the linked
+    ``User`` after signup/redeem, exposed here as read-only ``user_email``.
+    """
+
+    user_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Guardian
+        fields = (
+            'id',
+            'full_name',
+            'phone_number',
+            'relationship_to_student',
+            'user',
+            'user_email',
+        )
+        read_only_fields = ('id', 'user', 'user_email')
+
+    def get_user_email(self, obj):
+        user = getattr(obj, 'user', None)
+        return user.email if user is not None else None
+
+    def validate(self, attrs):
+        name = (
+            attrs.get('full_name', getattr(self.instance, 'full_name', None) or '')
+            or ''
+        ).strip()
+        phone = (
+            attrs.get(
+                'phone_number', getattr(self.instance, 'phone_number', None) or ''
+            )
+            or ''
+        ).strip()
+        if 'full_name' in attrs:
+            attrs['full_name'] = name
+        if 'phone_number' in attrs:
+            attrs['phone_number'] = phone
+        if not name and not phone:
+            raise serializers.ValidationError(
+                'Provide at least full_name or phone_number for the guardian.'
+            )
+        return attrs
+
+
+def _ensure_single_primary_contact(link):
+    """At most one primary StudentGuardianLink per student."""
+    if not link.is_primary_contact:
+        return
+    StudentGuardianLink.objects.filter(
+        student_id=link.student_id,
+        is_primary_contact=True,
+    ).exclude(pk=link.pk).update(is_primary_contact=False)
+
+
+class StudentGuardianLinkSerializer(serializers.ModelSerializer):
+    """Admin link between an existing Guardian and a Student."""
+
+    student_name = serializers.SerializerMethodField()
+    guardian_full_name = serializers.CharField(
+        source='guardian.full_name', read_only=True
+    )
+    guardian_phone_number = serializers.CharField(
+        source='guardian.phone_number', read_only=True
+    )
+    relationship_to_student = serializers.CharField(
+        source='guardian.relationship_to_student',
+        read_only=True,
+    )
+    user_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentGuardianLink
+        fields = (
+            'id',
+            'student',
+            'student_name',
+            'guardian',
+            'guardian_full_name',
+            'guardian_phone_number',
+            'relationship_to_student',
+            'user_email',
+            'is_primary_contact',
+        )
+        read_only_fields = (
+            'id',
+            'student_name',
+            'guardian_full_name',
+            'guardian_phone_number',
+            'relationship_to_student',
+            'user_email',
+        )
+        # Custom validate() surfaces a clearer duplicate-link message than
+        # DRF's auto UniqueTogetherValidator for uniq_student_guardian_link.
+        validators = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance is not None:
+            self.fields['student'].read_only = True
+            self.fields['guardian'].read_only = True
+
+    def get_student_name(self, obj):
+        student = obj.student
+        return f'{student.first_name} {student.last_name}'.strip()
+
+    def get_user_email(self, obj):
+        user = getattr(obj.guardian, 'user', None)
+        return user.email if user is not None else None
+
+    def validate(self, attrs):
+        student = attrs.get('student', getattr(self.instance, 'student', None))
+        guardian = attrs.get('guardian', getattr(self.instance, 'guardian', None))
+        if student is not None and guardian is not None:
+            qs = StudentGuardianLink.objects.filter(
+                student=student, guardian=guardian
+            )
+            if self.instance is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    'This guardian is already linked to this student.'
+                )
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        link = super().create(validated_data)
+        _ensure_single_primary_contact(link)
+        return link
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        link = super().update(instance, validated_data)
+        _ensure_single_primary_contact(link)
+        return link
+
+
+class StudentGuardianLinkNestedSerializer(serializers.ModelSerializer):
+    """Read-only guardian-link summary nested on student retrieve/create."""
+
+    guardian_full_name = serializers.CharField(
+        source='guardian.full_name', read_only=True
+    )
+    guardian_phone_number = serializers.CharField(
+        source='guardian.phone_number', read_only=True
+    )
+    relationship_to_student = serializers.CharField(
+        source='guardian.relationship_to_student',
+        read_only=True,
+    )
+    user_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentGuardianLink
+        fields = (
+            'id',
+            'guardian',
+            'guardian_full_name',
+            'guardian_phone_number',
+            'relationship_to_student',
+            'user_email',
+            'is_primary_contact',
+        )
+        read_only_fields = fields
+
+    def get_user_email(self, obj):
+        user = getattr(obj.guardian, 'user', None)
+        return user.email if user is not None else None
+
+
+class StudentDetailSerializer(StudentSerializer):
+    """Student retrieve/create: unused linking code plus linked guardians."""
+
+    guardian_links = StudentGuardianLinkNestedSerializer(many=True, read_only=True)
+
+    class Meta(StudentSerializer.Meta):
+        fields = StudentSerializer.Meta.fields + ('guardian_links',)
+        read_only_fields = StudentSerializer.Meta.read_only_fields + (
+            'guardian_links',
+        )
+
+
 class EnrollmentSerializer(serializers.ModelSerializer):
     student_name = serializers.SerializerMethodField()
     student_admission_number = serializers.CharField(

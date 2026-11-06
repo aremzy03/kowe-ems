@@ -21,6 +21,8 @@ class SchoolMembership(models.Model):
         BURSAR = 'bursar', 'Bursar'
         PARENT = 'parent', 'Parent'
 
+    STAFF_ROLES = (Role.ADMIN, Role.TEACHER, Role.BURSAR)
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

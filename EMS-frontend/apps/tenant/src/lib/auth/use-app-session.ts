@@ -19,14 +19,6 @@ const ROLE_DISPLAY: Record<SchoolRole, string> = {
   platform_admin: "Platform admin",
 };
 
-/**
- * Live mode has no person name yet: login returns only access+role, JWT claims
- * are user_id / tenant_schema / role / school_id (no first_name), and there is
- * no /api/auth/me. Fallback is a single title-cased role label so greetings
- * read "Welcome, Teacher" without the old "bursar" raw slug. Pages that still
- * prefix the role in titles (e.g. "Bursar · …") should drop that prefix when
- * they rewrite — do not invent a second name string here.
- */
 function liveDisplayName(role: SchoolRole | null): string {
   if (!role) return "User";
   return ROLE_DISPLAY[role] ?? role.replace(/_/g, " ");
@@ -35,6 +27,9 @@ function liveDisplayName(role: SchoolRole | null): string {
 /**
  * Unified display session: real AuthProvider, or mock cookie when USE_MOCKS.
  * MockSessionProvider must always be mounted (see Providers).
+ *
+ * Live mode loads person + school from GET /api/auth/me/ (AuthProvider).
+ * Until that lands, greetings fall back to a single title-cased role label.
  */
 export function useAppSession() {
   const auth = useAuth();
@@ -46,11 +41,11 @@ export function useAppSession() {
 
   const displayName = useMocks
     ? (mock.user?.name ?? "User")
-    : liveDisplayName(role);
+    : (auth.displayName ?? liveDisplayName(role));
 
   const schoolName = useMocks
     ? (mock.user?.schoolName ?? "School")
-    : "School";
+    : (auth.schoolName ?? "School");
 
   const logout = useCallback(async () => {
     if (useMocks) {

@@ -22,7 +22,7 @@ Platform UI must **not** live under EMS-frontend `/platform`. Landing links shou
 | Name | `X-Tenant-Slug` |
 | Value | First hostname label only (`testacademy` from `testacademy.localhost`) |
 | Source | Frontend hostname — client: `window.location.hostname`; server/RSC: incoming `Host` / middleware-forwarded slug. **Never** from the API URL. **Never** in the query string. |
-| Attach | Every `scope: 'tenant'` call (school auth including login, 2FA, refresh, logout; memberships; academics; assessment; attendance; finance) — pre-auth and post-auth |
+| Attach | Every `scope: 'tenant'` call (school auth including login, 2FA, refresh, logout; memberships; academics; assessment; attendance; finance; communications) — pre-auth and post-auth |
 | Omit | `scope: 'platform'` (platform login, `/api/platform/*`). Paystack webhooks are Django-only |
 | Fail closed | If tenant scope and slug cannot be derived → throw in the client; do not send a headerless school request |
 
@@ -108,6 +108,8 @@ No `/me` endpoint for MVP — role comes from login/2FA JSON (and optional clien
 | | CRUD | `/api/academics/class-teacher-assignments/` | ViewSet |
 | `/admin/staff` | POST | `/api/memberships/invites/` | Create invite only (no staff list API in MVP) |
 | `/admin/attendance` | GET | `/api/attendance/admin/overview/` | `?date=` or `?term=` |
+| `/admin/notifications` | GET | `/api/communications/notifications/` | School admin + confirmed TOTP. Filters: `status`, `trigger_type`, `channel`, `created_from`, `created_to`. Unpaginated, newest first. Bursar is 403. |
+| | POST | `/api/communications/notifications/{id}/resend/` | Failed rows only. Re-queues the same log (does not insert a second row). Sent/queued → 400. |
 | `/admin/fees` | GET | `/api/finance/dashboard/collections/?term=` | Collections visibility |
 
 ---
@@ -198,6 +200,7 @@ Paystack webhooks: `POST /api/webhooks/paystack/` on Django only — never in Ne
 | Assessment | `EMS-api/bruno/Assessment/` |
 | Attendance | `EMS-api/bruno/Attendance/` |
 | Finance | `EMS-api/bruno/Finance/` |
+| Communications | `EMS-api/bruno/Communications/` |
 
 ---
 

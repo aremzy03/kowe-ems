@@ -3,13 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   AttendanceOverview,
+  attendancePencilNote,
   type AttendanceOverviewData,
 } from "@/components/attendance/AttendanceOverview";
 import {
   CollectionsDashboard,
+  collectionsPencilNote,
   type CollectionsDashboardData,
 } from "@/components/finance/CollectionsDashboard";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader, PencilAside } from "@/components/ui";
 import { academicsApi } from "@/lib/api/academics";
 import { financeApi } from "@/lib/api/finance";
 import { attendanceApi } from "@/lib/api/attendance";
@@ -37,6 +39,9 @@ export default function AdminHomePage() {
     enabled: Boolean(termId),
   });
 
+  const note =
+    collectionsPencilNote(collections.data) ?? attendancePencilNote(attendance.data);
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -51,6 +56,7 @@ export default function AdminHomePage() {
         />
       ) : (
         <>
+          {note ? <PencilAside>{note}</PencilAside> : null}
           <section className="space-y-3">
             <h2
               className="text-lg font-bold tracking-tight"

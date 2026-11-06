@@ -32,7 +32,7 @@ const portals = [
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-paper px-6 py-12 text-ink md:px-10">
+    <main className="min-h-screen px-6 py-12 text-ink md:px-10">
       <div className="mx-auto max-w-5xl">
         <div className="mb-4">
           <KoweLockup width={240} className="mx-0" />

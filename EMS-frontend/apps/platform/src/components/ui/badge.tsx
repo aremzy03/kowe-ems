@@ -16,25 +16,27 @@ export type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 
 const variantClasses: Record<BadgeVariant, string> = {
   default: "bg-paper-card text-ink",
-  success: "bg-success text-paper-card",
-  warning: "bg-warning text-ink",
-  danger: "bg-danger text-paper-card",
-  info: "bg-accent-1 text-paper-card",
+  success: "bg-wash-success text-ink",
+  warning: "bg-wash-warning text-ink",
+  danger: "bg-wash-danger text-ink",
+  info: "bg-wash-info text-ink",
 };
 
 export function Badge({
   className,
   variant = "default",
   children,
+  style,
   ...props
 }: BadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-[var(--radius-nb-sm)] border border-ink px-2 py-0.5 text-xs font-semibold shadow-nb-sm",
+        "inline-flex items-center rounded-[var(--radius-nb-sm)] border border-ink px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.06em] shadow-nb-sm",
         variantClasses[variant],
         className,
       )}
+      style={{ ...style, fontFamily: "var(--font-mono)" }}
       {...props}
     >
       {children}
