@@ -4,10 +4,12 @@ Report card PDF generation via WeasyPrint.
 Ranks / averages come from materialized ``TermResult`` / ``TermResultSummary``.
 Callers must run ``POST /api/assessment/results/recompute/`` first — this
 module does not recompute on the fly (same explicit-trigger strategy as
-Prompt 4).
+Phase 2 Prompt 4).
 
-Attendance (Phase 3) is optional: missing models/tables never raise; the
-template shows a clear "Not available" placeholder instead.
+Attendance uses compute-on-read ``compute_term_attendance_summary``. Zero
+daily marks → "Attendance data not available" rather than misleading zeros.
+When marks exist but ``Term.total_school_days`` is unset, counts still render
+and attendance % shows as unavailable (no invented calendar).
 """
 
 from __future__ import annotations
@@ -34,15 +36,17 @@ from memberships.permissions import resolve_request_membership
 
 
 @dataclass(frozen=True)
-class AttendancePlaceholder:
-    """Graceful stand-in until Phase 3 wires real term attendance."""
+class ReportCardAttendance:
+    """Attendance block for the report-card PDF (compute-on-read)."""
 
     available: bool
     message: str
     days_present: int | None = None
     days_absent: int | None = None
     days_late: int | None = None
+    days_excused: int | None = None
     total_school_days: int | None = None
+    attendance_percentage: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -51,60 +55,59 @@ class AttendancePlaceholder:
             'days_present': self.days_present,
             'days_absent': self.days_absent,
             'days_late': self.days_late,
+            'days_excused': self.days_excused,
             'total_school_days': self.total_school_days,
+            'attendance_percentage': self.attendance_percentage,
         }
 
 
-ATTENDANCE_NOT_AVAILABLE = AttendancePlaceholder(
+# Backward-compatible alias for any imports of the Phase 2/3 interim name.
+AttendancePlaceholder = ReportCardAttendance
+
+ATTENDANCE_NOT_AVAILABLE = ReportCardAttendance(
     available=False,
-    message='Not available — attendance module not yet enabled for this school.',
+    message='Attendance data not available',
 )
 
 
-def get_attendance_summary_for_report(*, student, term) -> AttendancePlaceholder:
+def get_attendance_summary_for_report(*, student, term) -> ReportCardAttendance:
     """
-    Resolve attendance for the report card without requiring Phase 3.
+    Resolve attendance for the report card via compute-on-read summary.
 
-    Never raises on missing attendance app models or tables. When Phase 3
-    adds a termly summary model, prefer loading it here and returning
-    ``available=True`` with real counts; until then the placeholder is fine.
+    Never raises on missing attendance helpers. Zero DailyAttendance rows
+    → available=False (no misleading all-absent zeros). Percentage is only
+    set when the admin has configured ``Term.total_school_days``.
     """
     try:
-        # Soft probe: Phase 3 may introduce TermAttendanceSummary (or similar).
-        # ImportError / AttributeError → placeholder. Do not hard-depend.
-        from attendance import models as attendance_models  # noqa: WPS433
+        from attendance.services import (  # noqa: WPS433
+            compute_term_attendance_summary,
+        )
     except ImportError:
         return ATTENDANCE_NOT_AVAILABLE
 
-    summary_model = getattr(attendance_models, 'TermAttendanceSummary', None)
-    if summary_model is None:
-        return ATTENDANCE_NOT_AVAILABLE
-
     try:
-        row = (
-            summary_model.objects.filter(
-                student_id=student.pk,
-                term_id=term.pk if hasattr(term, 'pk') else term,
-            )
-            .first()
-        )
+        summary = compute_term_attendance_summary(student=student, term=term)
     except Exception:
-        # Table missing, migration not applied, or unexpected schema — never 500.
+        # Unexpected failure must never 500 report-card generation.
         return ATTENDANCE_NOT_AVAILABLE
 
-    if row is None:
-        return AttendancePlaceholder(
+    if not summary.available:
+        return ReportCardAttendance(
             available=False,
-            message='Not available — no attendance summary recorded for this term.',
+            message=summary.message or 'Attendance data not available',
+            total_school_days=summary.total_school_days,
         )
 
-    return AttendancePlaceholder(
+    pct = summary.attendance_percentage
+    return ReportCardAttendance(
         available=True,
         message='',
-        days_present=getattr(row, 'days_present', None),
-        days_absent=getattr(row, 'days_absent', None),
-        days_late=getattr(row, 'days_late', None),
-        total_school_days=getattr(row, 'total_school_days', None),
+        days_present=summary.days_present,
+        days_absent=summary.days_absent,
+        days_late=summary.days_late,
+        days_excused=summary.days_excused,
+        total_school_days=summary.total_school_days,
+        attendance_percentage=str(pct) if pct is not None else None,
     )
 
 
@@ -147,6 +150,10 @@ def build_report_card_context(*, student: Student, term: Term) -> dict[str, Any]
 
     Raises ``ValidationError`` when no summary exists — PDF ranks require an
     explicit class recompute first.
+
+    This does not check ``is_published``. The parent API refuses the PDF
+    until an admin publishes; admin, teacher, and management-command
+    renders still include unpublished results.
     """
     summary = (
         TermResultSummary.objects.select_related('student', 'term', 'term__session')

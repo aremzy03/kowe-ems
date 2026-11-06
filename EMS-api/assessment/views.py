@@ -31,6 +31,7 @@ from assessment.serializers import (
     BroadsheetQuerySerializer,
     BulkScoreUpsertSerializer,
     CloneSchemeSerializer,
+    PublishClassResultsSerializer,
     RecomputeClassResultsSerializer,
     ReportCardQuerySerializer,
     ScoreSerializer,
@@ -48,6 +49,24 @@ from memberships.permissions import (
     IsTeacher,
     resolve_request_membership,
 )
+
+RESULTS_NOT_PUBLISHED_DETAIL = (
+    'Results for this term have not been published yet.'
+)
+
+
+def _unpublished_parent_results_payload(student, term):
+    """Parent read with no averages, positions, remarks, or subject scores."""
+    return {
+        'student': str(student.pk),
+        'student_name': f'{student.last_name}, {student.first_name}',
+        'term': str(term.pk),
+        'term_name': term.name,
+        'summary': None,
+        'subject_results': [],
+        'is_published': False,
+        'detail': RESULTS_NOT_PUBLISHED_DETAIL,
+    }
 
 
 def filter_components_for_teacher(queryset, user):
@@ -368,6 +387,46 @@ class RecomputeClassResultsView(APIView):
         )
 
 
+class PublishClassResultsView(APIView):
+    """
+    POST /api/assessment/results/publish/
+
+    Admin-only release for one class_level + arm + term. Sets
+    ``is_published`` and ``published_at`` on every TermResultSummary in
+    that group. Email and WhatsApp ``result_published`` notifications are
+    queued on commit, and only for summaries that were not already
+    published. Teachers and parents cannot call this.
+    """
+
+    permission_classes = [IsSchoolAdmin]
+
+    def post(self, request, *args, **kwargs):
+        serializer = PublishClassResultsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = serializer.save()
+        if result['newly_published_count']:
+            detail = 'Results published.'
+        else:
+            detail = 'Results were already published.'
+        return Response(
+            {
+                'detail': detail,
+                'class_level': str(result['class_level_id']),
+                'arm': str(result['arm_id']),
+                'term': str(result['term_id']),
+                'published_count': result['published_count'],
+                'newly_published_count': result['newly_published_count'],
+                'students_without_summary': result['students_without_summary'],
+                'published_at': result['published_at'].isoformat(),
+                'summaries': TermResultSummarySerializer(
+                    result['summaries'],
+                    many=True,
+                ).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class StudentTermResultsView(APIView):
     """
     GET /api/assessment/results/student/?student=<uuid>&term=<uuid>
@@ -376,6 +435,9 @@ class StudentTermResultsView(APIView):
     broadsheet / report-card consumption.
 
     Access: admin (any), teacher (assigned class), parent (linked student).
+    Parents receive scores only when the summary ``is_published`` is true.
+    Until then the payload has an empty summary and no subject rows.
+    Admin and teacher reads include unpublished results.
     """
 
     permission_classes = [IsAuthenticated]
@@ -407,6 +469,11 @@ class StudentTermResultsView(APIView):
             .filter(student=student, term=term)
             .first()
         )
+        if membership.role == SchoolMembership.Role.PARENT and (
+            summary is None or not summary.is_published
+        ):
+            return Response(_unpublished_parent_results_payload(student, term))
+
         subject_results = (
             TermResult.objects.select_related('subject', 'term', 'student')
             .filter(student=student, term=term)
@@ -508,10 +575,13 @@ class ReportCardPDFView(APIView):
     Downloadable WeasyPrint PDF (``Content-Disposition: attachment``).
 
     Access: admin (any), teacher (assigned class), parent (linked student).
+    Parents receive the PDF only when the summary is published. Admin and
+    teacher downloads are available before publication.
 
     Uses materialized TermResult / TermResultSummary — run recompute for the
     class first or the endpoint returns 404 with a clear message. Attendance
-    is omitted gracefully until Phase 3 (placeholder section, no 500).
+    is compute-on-read; when no daily marks exist the PDF shows
+    "Attendance data not available" rather than zeros.
     """
 
     permission_classes = [IsAuthenticated]
@@ -539,6 +609,15 @@ class ReportCardPDFView(APIView):
         query.is_valid(raise_exception=True)
         student = query.validated_data['student']
         term = query.validated_data['term']
+
+        if membership.role == SchoolMembership.Role.PARENT:
+            released = TermResultSummary.objects.filter(
+                student=student,
+                term=term,
+                is_published=True,
+            ).exists()
+            if not released:
+                raise NotFound(detail=RESULTS_NOT_PUBLISHED_DETAIL)
 
         try:
             pdf_bytes = render_report_card_pdf(student=student, term=term)

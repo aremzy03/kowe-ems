@@ -105,13 +105,15 @@ class TermResultSummaryAdmin(admin.ModelAdmin):
         'term',
         'overall_average',
         'class_position',
+        'is_published',
+        'published_at',
         'computed_at',
     )
-    list_filter = ('term',)
+    list_filter = ('term', 'is_published')
     search_fields = (
         'student__first_name',
         'student__last_name',
         'student__admission_number',
     )
-    readonly_fields = ('id', 'computed_at')
+    readonly_fields = ('id', 'computed_at', 'is_published', 'published_at')
     raw_id_fields = ('student', 'term')

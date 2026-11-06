@@ -1,0 +1,58 @@
+meta {
+  name: 10 Teacher Bulk Upsert Same Payload Again
+  type: http
+  seq: 10
+  tags: [
+    attendance
+    smoke
+    phase3
+    idempotency
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/attendance/daily/bulk-upsert/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+body:json {
+  {
+    "class_level_id": "{{classLevelId}}",
+    "arm_id": "{{armId}}",
+    "term_id": "{{termId}}",
+    "date": "{{attendanceDate}}",
+    "entries": [
+      {
+        "student_id": "{{studentId}}",
+        "status": "present",
+        "remarks": "Bruno phase3 register"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.succeeded: eq 1
+  res.body.failed: eq 0
+}
+
+tests {
+  test("identical retry is idempotent: created=false and changed=false", function () {
+    const body = res.getBody();
+    expect(body.count).to.equal(1);
+    expect(body.succeeded).to.equal(1);
+    expect(body.results[0].success).to.equal(true);
+    expect(body.results[0].created).to.equal(false);
+    expect(body.results[0].changed).to.equal(false);
+    expect(body.results[0].id).to.equal(bru.getEnvVar("dailyAttendanceId"));
+  });
+}

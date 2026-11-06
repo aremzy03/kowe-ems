@@ -1,0 +1,58 @@
+meta {
+  name: 16 Teacher Bulk Upsert Unassigned Class Denied
+  type: http
+  seq: 16
+  tags: [
+    attendance
+    smoke
+    phase3
+    rbac
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/attendance/daily/bulk-upsert/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+body:json {
+  {
+    "class_level_id": "{{classLevelId}}",
+    "arm_id": "{{unassignedArmId}}",
+    "term_id": "{{termId}}",
+    "date": "{{attendanceDate}}",
+    "entries": [
+      {
+        "student_id": "{{unassignedArmStudentId}}",
+        "status": "present",
+        "remarks": "should be denied"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.succeeded: eq 0
+  res.body.failed: eq 1
+}
+
+tests {
+  test("teacher cannot mark attendance without ClassTeacherAssignment", function () {
+    expect(res.getStatus()).to.equal(400);
+    const body = res.getBody();
+    expect(body.succeeded).to.equal(0);
+    expect(body.failed).to.equal(1);
+    expect(body.results[0].success).to.equal(false);
+    const blob = JSON.stringify(body.results[0].errors);
+    expect(blob).to.match(/not the assigned class teacher|ClassTeacherAssignment/i);
+  });
+}

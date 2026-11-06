@@ -4,6 +4,7 @@ from academics.models import (
     Arm,
     ClassLevel,
     ClassSubjectAssignment,
+    ClassTeacherAssignment,
     Enrollment,
     Guardian,
     Session,
@@ -25,7 +26,14 @@ class SessionAdmin(admin.ModelAdmin):
 
 @admin.register(Term)
 class TermAdmin(admin.ModelAdmin):
-    list_display = ('name', 'session', 'start_date', 'end_date', 'is_active')
+    list_display = (
+        'name',
+        'session',
+        'start_date',
+        'end_date',
+        'total_school_days',
+        'is_active',
+    )
     list_filter = ('is_active', 'name', 'session')
     search_fields = ('session__name',)
     readonly_fields = ('id',)
@@ -75,6 +83,25 @@ class ClassSubjectAssignmentAdmin(admin.ModelAdmin):
     )
     readonly_fields = ('id', 'created_at')
     raw_id_fields = ('teacher', 'subject', 'class_level', 'arm', 'term')
+
+
+@admin.register(ClassTeacherAssignment)
+class ClassTeacherAssignmentAdmin(admin.ModelAdmin):
+    list_display = (
+        'teacher',
+        'class_level',
+        'arm',
+        'term',
+        'created_at',
+    )
+    list_filter = ('term', 'class_level')
+    search_fields = (
+        'teacher__email',
+        'class_level__name',
+        'arm__name',
+    )
+    readonly_fields = ('id', 'created_at')
+    raw_id_fields = ('teacher', 'class_level', 'arm', 'term')
 
 
 @admin.register(Student)

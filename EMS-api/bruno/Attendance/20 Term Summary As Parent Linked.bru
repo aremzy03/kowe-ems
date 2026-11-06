@@ -1,0 +1,37 @@
+meta {
+  name: 20 Term Summary As Parent Linked
+  type: http
+  seq: 20
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/summaries/student/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.available: eq true
+  res.body.days_present: eq 1
+}
+
+tests {
+  test("linked parent can read own child's termly attendance summary", function () {
+    const body = res.getBody();
+    expect(body.available).to.equal(true);
+    expect(body.days_present).to.equal(1);
+    expect(body.total_school_days).to.equal(60);
+  });
+}

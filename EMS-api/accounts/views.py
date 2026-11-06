@@ -1,6 +1,7 @@
 """JWT cookie auth views: login, refresh, logout, verify, and TOTP 2FA."""
 
 from django.conf import settings
+from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
@@ -41,14 +42,49 @@ class CsrfProtectedAPIMixin:
         return view
 
 
-def _cookie_token_response(tokens: dict, extra: dict | None = None) -> Response:
+def _csrf_token_for_client(request) -> str:
+    """
+    Ensure the CSRF cookie is set and return the token for JSON clients.
+
+    Cross-origin SPAs (e.g. platform.localhost → localhost:8000) cannot read
+    ``document.cookie`` for the API host; they must use this value in
+    ``X-CSRFToken`` on refresh/logout.
+    """
+    return get_token(request)
+
+
+def _cookie_token_response(
+    request, tokens: dict, extra: dict | None = None
+) -> Response:
     """JSON access (+ extras); refresh goes to httpOnly cookie only."""
-    body = {'access': tokens['access']}
+    body = {
+        'access': tokens['access'],
+        'csrfToken': _csrf_token_for_client(request),
+    }
     if extra:
         body.update(extra)
     response = Response(body, status=status.HTTP_200_OK)
     set_refresh_cookie(response, tokens['refresh'])
     return response
+
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class CsrfTokenView(APIView):
+    """
+    GET /api/auth/csrf/
+
+    Sets ``csrftoken`` cookie and returns ``{csrfToken}`` for SPAs that cannot
+    read the API host's cookies (cross-site frontends).
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(
+            {'csrfToken': _csrf_token_for_client(request)},
+            status=status.HTTP_200_OK,
+        )
 
 
 @method_decorator(ensure_csrf_cookie, name='dispatch')
@@ -58,7 +94,8 @@ class CookieTokenObtainPairView(TokenObtainPairView):
 
     Password step. Teacher/parent: access in JSON + refresh cookie.
     Admin/bursar: no tokens yet — ``requires_2fa`` + ``pre_auth_token``.
-    Sets the csrftoken cookie so the SPA can call refresh/logout afterwards.
+    Sets the csrftoken cookie and returns ``csrfToken`` in JSON so the SPA
+    can call refresh/logout afterwards.
     """
 
     serializer_class = EMSTokenObtainPairSerializer
@@ -78,6 +115,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                     'pre_auth_token': data['pre_auth_token'],
                     'role': data['role'],
                     'detail': data['detail'],
+                    'csrfToken': _csrf_token_for_client(request),
                 },
                 status=status.HTTP_200_OK,
             )
@@ -88,6 +126,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             'access': data['access'],
             'requires_2fa': False,
             'role': data.get('role'),
+            'csrfToken': _csrf_token_for_client(request),
         }
         response = Response(body, status=status.HTTP_200_OK)
         if refresh:
@@ -168,6 +207,7 @@ class TwoFactorVerifyView(APIView):
         tokens = serializer.validated_data['tokens']
         membership = serializer.validated_data['membership']
         return _cookie_token_response(
+            request,
             tokens,
             extra={
                 'requires_2fa': False,
@@ -211,6 +251,7 @@ class TwoFactorEnrollConfirmView(APIView):
         if tokens:
             membership = serializer.validated_data['membership']
             return _cookie_token_response(
+                request,
                 tokens,
                 extra={
                     'requires_2fa': False,

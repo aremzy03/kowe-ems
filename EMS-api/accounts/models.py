@@ -40,8 +40,12 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     """
-    Shared identity only (public schema). Roles live on per-tenant
-    SchoolMembership (Prompt 4) — not on this model.
+    Shared identity only (public schema). School roles live on per-tenant
+    SchoolMembership — not on this model.
+
+    ``is_platform_admin`` is the Phase 4 exception: platform operators have
+    no SchoolMembership. They authenticate on the public host
+    (PUBLIC_SCHEMA_URLCONF) and are gated by this flag, not a tenant role.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -50,6 +54,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=150, blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    is_platform_admin = models.BooleanField(
+        default=False,
+        help_text=(
+            'Platform operator (not school staff). Can log in on the public '
+            'platform host without a SchoolMembership and access cross-tenant '
+            'revenue. Distinct from is_superuser / Django admin.'
+        ),
+    )
     date_joined = models.DateTimeField(default=timezone.now)
 
     objects = UserManager()

@@ -1,0 +1,43 @@
+meta {
+  name: 07 Parent Report Card Before Publish
+  type: http
+  seq: 7
+  tags: [
+    communications
+    smoke
+    phase5
+    parents
+    report-card
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/report-cards/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: */*
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 404
+}
+
+tests {
+  test("linked parent cannot download the PDF before publish", function () {
+    expect(res.getStatus()).to.equal(404);
+    const body = res.getBody();
+    expect(body.detail).to.equal("Results for this term have not been published yet.");
+  });
+}
+
+docs {
+  Parents receive 404 until the summary is published. Staff PDF downloads
+  are still allowed; this request is the parent path only.
+  Accept */* matches the other report-card requests (application/pdf alone
+  can 406).
+}

@@ -2,8 +2,8 @@
 TOTP two-factor helpers (shared/public schema via django-otp).
 
 Design (tenant role × shared User login):
-- Login always hits a tenant host, so TenantMainMiddleware has already set the
-  school schema before password validation runs.
+- Login is identified by ``X-Tenant-Slug`` (or a JWT ``tenant_schema`` claim),
+  so the school schema is already set before password validation runs.
 - After password succeeds we resolve SchoolMembership in *this* tenant.
 - teacher/parent → issue normal JWT access + refresh immediately.
 - admin/bursar → do **not** issue full tokens; return a short-lived pre_2fa
@@ -63,6 +63,26 @@ def get_pending_totp_device(user):
     )
 
 
+def stamp_tenant_claims(token, user=None):
+    """Embed schema (+ role when known) so middleware can select the tenant."""
+    from django.db import connection
+    from django_tenants.utils import get_public_schema_name
+
+    token['school_id'] = None
+    token['tenant_schema'] = connection.schema_name
+    if user is None:
+        return token
+    membership = resolve_login_membership(user)
+    if membership is not None:
+        token['role'] = membership.role
+    elif (
+        getattr(user, 'is_platform_admin', False)
+        and connection.schema_name == get_public_schema_name()
+    ):
+        token['role'] = 'platform_admin'
+    return token
+
+
 def mint_pre_2fa_token(user) -> str:
     """Short-lived access token that authenticates only for 2FA enroll/verify."""
     token = AccessToken.for_user(user)
@@ -70,7 +90,7 @@ def mint_pre_2fa_token(user) -> str:
         lifetime=getattr(settings, 'PRE_2FA_TOKEN_LIFETIME', timedelta(minutes=10))
     )
     token['ems_purpose'] = PRE_2FA_PURPOSE
-    token['school_id'] = None
+    stamp_tenant_claims(token, user)
     return str(token)
 
 
@@ -102,9 +122,8 @@ def parse_pre_2fa_token(raw: str) -> AccessToken:
 def issue_auth_tokens_for_user(user) -> dict:
     """Build the same payload shape SimpleJWT TokenObtainPair would return."""
     refresh = RefreshToken.for_user(user)
-    refresh['school_id'] = None
+    stamp_tenant_claims(refresh, user)
     access = refresh.access_token
-    access['school_id'] = None
     return {
         'access': str(access),
         'refresh': str(refresh),

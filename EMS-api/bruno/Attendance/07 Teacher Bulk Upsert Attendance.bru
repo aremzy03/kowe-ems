@@ -1,0 +1,65 @@
+meta {
+  name: 07 Teacher Bulk Upsert Attendance
+  type: http
+  seq: 7
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/attendance/daily/bulk-upsert/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+body:json {
+  {
+    "class_level_id": "{{classLevelId}}",
+    "arm_id": "{{armId}}",
+    "term_id": "{{termId}}",
+    "date": "{{attendanceDate}}",
+    "entries": [
+      {
+        "student_id": "{{studentId}}",
+        "status": "present",
+        "remarks": "Bruno phase3 register"
+      }
+    ]
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body) {
+    bru.setEnvVar("attendanceBulkSucceededFirst", String(res.body.succeeded));
+    if (res.body.results && res.body.results[0] && res.body.results[0].id) {
+      bru.setEnvVar("dailyAttendanceId", res.body.results[0].id);
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.succeeded: eq 1
+  res.body.failed: eq 0
+}
+
+tests {
+  test("class teacher bulk-marks attendance for assigned class", function () {
+    const body = res.getBody();
+    expect(body.count).to.equal(1);
+    expect(body.succeeded).to.equal(1);
+    expect(body.results[0].success).to.equal(true);
+    expect(body.results[0].created).to.equal(true);
+    expect(body.results[0].status).to.equal("present");
+  });
+}

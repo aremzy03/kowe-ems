@@ -1,0 +1,36 @@
+meta {
+  name: 23 Parent Daily Attendance Log Linked
+  type: http
+  seq: 23
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/parents/daily/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.count: eq 1
+}
+
+tests {
+  test("linked parent can read child's daily attendance log", function () {
+    const body = res.getBody();
+    expect(body.count).to.equal(1);
+    expect(body.results[0].status).to.equal("present");
+    expect(body.results[0].date).to.equal(bru.getEnvVar("attendanceDate"));
+  });
+}

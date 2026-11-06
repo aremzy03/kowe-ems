@@ -1,0 +1,38 @@
+meta {
+  name: 25 Admin Overview By Date
+  type: http
+  seq: 25
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/admin/overview/?date={{attendanceDate}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.mode: eq date
+}
+
+tests {
+  test("admin date overview reports class mark-entry status", function () {
+    const body = res.getBody();
+    expect(body.mode).to.equal("date");
+    expect(body.date).to.equal(bru.getEnvVar("attendanceDate"));
+    expect(body.classes).to.be.an("array");
+    expect(body.summary).to.be.an("object");
+    expect(body.summary.total_classes).to.be.at.least(1);
+  });
+}

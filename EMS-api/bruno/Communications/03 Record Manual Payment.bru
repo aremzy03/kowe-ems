@@ -1,0 +1,66 @@
+meta {
+  name: 03 Record Manual Payment
+  type: http
+  seq: 3
+  tags: [
+    communications
+    smoke
+    phase5
+    bursar
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/finance/payments/manual/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{bursarAccessToken}}
+}
+
+body:json {
+  {
+    "invoice": "{{parentInvoiceId}}",
+    "amount": "{{parentInvoiceTotal}}",
+    "method": "cash",
+    "notes": "Bruno Phase 5 cash at bursar desk"
+  }
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 201) {
+    bru.setEnvVar("manualPaymentId", body.payment_id);
+    bru.setEnvVar("manualPaymentReference", body.reference);
+    bru.setEnvVar("parentInvoiceStatusAfterManual", body.invoice_status);
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+tests {
+  test("bursar cash records a success payment on the linked invoice", function () {
+    const body = res.getBody();
+    expect(body.gateway).to.equal("manual");
+    expect(body.method).to.equal("cash");
+    expect(body.payment_status).to.equal("success");
+    expect(body.invoice_status).to.equal("paid");
+    expect(body.reference).to.match(/^manual-/);
+    expect(body.invoice).to.equal(bru.getEnvVar("parentInvoiceId"));
+    expect(body.amount).to.equal(bru.getEnvVar("parentInvoiceTotal"));
+    expect(body.payment_id).to.be.a("string");
+  });
+}
+
+docs {
+  Pays the linked student's invoice so payment_confirmed has a parent
+  recipient. A notes edit of this success row does not send again. The
+  notification is queued on commit, not inside the payment write.
+}

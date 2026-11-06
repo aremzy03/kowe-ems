@@ -7,9 +7,11 @@ overrides live in ``production.py``.
 """
 
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import environ
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -60,10 +62,10 @@ TENANT_APPS = [
 
 INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
 
-# TenantMainMiddleware must run first so the request host maps to a schema
+# HeaderTenantMiddleware must run first so JWT / X-Tenant-Slug map to a schema
 # before SecurityMiddleware or any other middleware touches the DB / tenant.
 MIDDLEWARE = [
-    'django_tenants.middleware.main.TenantMainMiddleware',
+    'platform_admin.middleware.HeaderTenantMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -76,6 +78,13 @@ MIDDLEWARE = [
 
 TENANT_MODEL = 'platform_admin.Tenant'
 TENANT_DOMAIN_MODEL = 'platform_admin.Domain'
+
+# Single-host API: school, platform, and webhook routes share ROOT_URLCONF.
+# Schema is selected by HeaderTenantMiddleware (JWT claim / X-Tenant-Slug),
+# not by Host. PUBLIC_SCHEMA_URLCONF stays aligned so django-tenants internals
+# that still consult it do not 404 platform paths.
+PUBLIC_SCHEMA_URLCONF = 'config.urls'
+SHOW_PUBLIC_IF_NO_TENANT_FOUND = True
 
 DATABASE_ROUTERS = ['django_tenants.routers.TenantSyncRouter']
 
@@ -150,8 +159,17 @@ AUTH_USER_MODEL = 'accounts.User'
 # Secure cookies, so local.py sets this False (override with AUTH_COOKIE_SECURE).
 AUTH_REFRESH_COOKIE_NAME = 'refresh_token'
 AUTH_REFRESH_COOKIE_PATH = '/api/auth/'
-AUTH_REFRESH_COOKIE_SAMESITE = 'Strict'
+# Strict is correct when the SPA and API are same-site subdomains of one
+# parent (schoola.yourapp.com → api.yourapp.com). Cross-site local setups
+# (testacademy.localhost → localhost) will not send this cookie; override.
+AUTH_REFRESH_COOKIE_SAMESITE = env('AUTH_REFRESH_COOKIE_SAMESITE', default='Strict')
 AUTH_COOKIE_SECURE = env.bool('AUTH_COOKIE_SECURE', default=True)
+# Host-only when empty (preferred: cookie lives on the API host). Set to
+# ``.yourapp.com`` only if you must share the refresh cookie across hosts.
+AUTH_COOKIE_DOMAIN = env('AUTH_COOKIE_DOMAIN', default='') or None
+# Readable CSRF cookie must be on the parent domain so the SPA on a school
+# subdomain can send ``X-CSRFToken`` to the API host. Empty = host-only.
+CSRF_COOKIE_DOMAIN = env('CSRF_COOKIE_DOMAIN', default='') or None
 
 # --- CORS ---
 # Origins come from CORS_ALLOWED_ORIGINS (comma-separated, no trailing slash).
@@ -161,9 +179,13 @@ AUTH_COOKIE_SECURE = env.bool('AUTH_COOKIE_SECURE', default=True)
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+# Wildcard frontend subdomains, e.g. ^https://[\\w-]+\\.yourapp\\.com$
+CORS_ALLOWED_ORIGIN_REGEXES = env.list('CORS_ALLOWED_ORIGIN_REGEXES', default=[])
+# Browser preflight must allow the tenant header.
+CORS_ALLOW_HEADERS = (*default_headers, 'x-tenant-slug')
 
 # Cross-origin POSTs to cookie endpoints (refresh/logout) need a trusted
-# frontend origin. Empty by default; local.py / env should list the SPA.
+# frontend origin. Django 5 accepts ``https://*.yourapp.com`` wildcards.
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
 # Auth brute-force limit: 5/min per IP on login + refresh only (tunable).
@@ -196,24 +218,65 @@ SIMPLE_JWT = {
     'TOKEN_REFRESH_SERIALIZER': 'accounts.serializers.CookieTokenRefreshSerializer',
 }
 
-# --- Integrations (values only; wiring comes in later prompts) ---
+# --- Celery / Redis ---
+# Phase 0 set the broker URL. The app lives in config/celery.py and the
+# compose `worker` service runs `celery -A config worker`. Tasks stay off
+# the request cycle: do not set CELERY_TASK_ALWAYS_EAGER.
 REDIS_URL = env('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+CELERY_TASK_TRACK_STARTED = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 PAYSTACK_SECRET_KEY = env('PAYSTACK_SECRET_KEY', default='')
+# Platform-wide commission on online fee payments (percent of each
+# transaction retained by the platform account via Paystack subaccount
+# percentage_charge). Deliberately NOT settable by school admins.
+PLATFORM_COMMISSION_PCT = Decimal(env('PLATFORM_COMMISSION_PCT', default='5.00'))
 SENTRY_DSN = env('SENTRY_DSN', default='')
 
 # --- Email / staff invites ---
-# Production should set a real backend + DEFAULT_FROM_EMAIL. Local uses console.
+# Local (config.settings.local) forces the console backend so messages
+# print to stdout. Production keeps Django's generic SMTP backend — host,
+# port, and credentials are set in config.settings.production from the
+# environment. No provider SDK.
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@ems.local')
 EMAIL_BACKEND = env(
     'EMAIL_BACKEND',
     default='django.core.mail.backends.smtp.EmailBackend',
 )
 STAFF_INVITE_EXPIRY_DAYS = env.int('STAFF_INVITE_EXPIRY_DAYS', default=7)
-# Frontend path on the tenant host; email link is {tenant-origin}{path}?token=...
+# Frontend path on the school subdomain; email link is {frontend-origin}{path}?token=...
 STAFF_INVITE_ACCEPT_PATH = env('STAFF_INVITE_ACCEPT_PATH', default='/accept-invite')
+# Invite / signup links point at the SPA, not the API host.
+# Template may use {slug} (first Domain label) and {domain} (full Domain.domain).
+TENANT_FRONTEND_ORIGIN_TEMPLATE = env('TENANT_FRONTEND_ORIGIN_TEMPLATE', default='')
+TENANT_FRONTEND_SCHEME = env('TENANT_FRONTEND_SCHEME', default='https')
+TENANT_FRONTEND_PORT = env('TENANT_FRONTEND_PORT', default='')
+
+# --- WhatsApp (Meta Cloud API / Graph). No BSP SDK. ---
+# Local forces the console backend (prints the template). Production posts
+# to Graph when WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID are set.
+# Templates are submitted by hand; see communications/whatsapp_templates.py.
+# Pair limit is 1 message per recipient per 6 seconds (error 131056). The
+# queue spaces a bulk enqueue by WHATSAPP_PAIR_INTERVAL_SECONDS.
+WHATSAPP_BACKEND = env('WHATSAPP_BACKEND', default='cloud')
+WHATSAPP_ACCESS_TOKEN = env('WHATSAPP_ACCESS_TOKEN', default='')
+WHATSAPP_PHONE_NUMBER_ID = env('WHATSAPP_PHONE_NUMBER_ID', default='')
+WHATSAPP_BUSINESS_ACCOUNT_ID = env('WHATSAPP_BUSINESS_ACCOUNT_ID', default='')
+WHATSAPP_API_VERSION = env('WHATSAPP_API_VERSION', default='v21.0')
+WHATSAPP_API_BASE_URL = env(
+    'WHATSAPP_API_BASE_URL', default='https://graph.facebook.com',
+)
+WHATSAPP_TIMEOUT = env.int('WHATSAPP_TIMEOUT', default=30)
+WHATSAPP_PAIR_INTERVAL_SECONDS = env.int(
+    'WHATSAPP_PAIR_INTERVAL_SECONDS', default=6,
+)
 
 # --- Two-factor auth (TOTP via django-otp) ---
 # Short-lived JWT after password for admin/bursar until TOTP succeeds.

@@ -108,25 +108,21 @@
       color: #888;
       font-style: italic;
     }
-    /* PHASE 3 PLACEHOLDER — attendance summary.
-       Do not remove this section; Phase 3 wires real counts into
-       ``attendance`` context. Until then ``available`` is false. */
     .attendance {
       margin-top: 4px;
       padding: 8px 10px;
-      border: 1px dashed #999;
-      background: #fcfcfc;
-    }
-    .attendance .placeholder-label {
-      font-size: 8.5pt;
-      color: #666;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      margin-bottom: 4px;
+      border: 1px solid #888;
+      background: #fafafa;
     }
     .attendance .na {
       color: #666;
       font-style: italic;
+      margin: 0;
+    }
+    .attendance .pct-note {
+      margin: 6px 0 0 0;
+      font-size: 9pt;
+      color: #555;
     }
     .footnote {
       margin-top: 18px;
@@ -225,30 +221,34 @@
     {% endif %}
   </div>
 
-  {# --- Attendance (Phase 3 placeholder) --- #}
   <h2>Attendance summary</h2>
   <div class="attendance">
-    <div class="placeholder-label">
-      <!-- PHASE3_ATTENDANCE_SECTION: replace placeholder when TermAttendanceSummary exists -->
-      Attendance (Phase 3)
-    </div>
     {% if attendance.available %}
       <table class="meta">
         <tr>
+          <td class="label">Total school days</td>
+          <td>{% if attendance.total_school_days != None %}{{ attendance.total_school_days }}{% else %}—{% endif %}</td>
           <td class="label">Days present</td>
           <td>{{ attendance.days_present }}</td>
-          <td class="label">Days absent</td>
-          <td>{{ attendance.days_absent }}</td>
         </tr>
         <tr>
+          <td class="label">Days absent</td>
+          <td>{{ attendance.days_absent }}</td>
           <td class="label">Days late</td>
           <td>{{ attendance.days_late }}</td>
-          <td class="label">School days</td>
-          <td>{{ attendance.total_school_days }}</td>
+        </tr>
+        <tr>
+          <td class="label">Days excused</td>
+          <td>{{ attendance.days_excused }}</td>
+          <td class="label">Attendance %</td>
+          <td>{% if attendance.attendance_percentage %}{{ attendance.attendance_percentage }}%{% else %}—{% endif %}</td>
         </tr>
       </table>
+      {% if not attendance.attendance_percentage %}
+      <p class="pct-note">Attendance percentage is not shown because total school days for this term has not been set by the school.</p>
+      {% endif %}
     {% else %}
-      <p class="na">{{ attendance.message|default:"Not available" }}</p>
+      <p class="na">{{ attendance.message|default:"Attendance data not available" }}</p>
     {% endif %}
   </div>
 

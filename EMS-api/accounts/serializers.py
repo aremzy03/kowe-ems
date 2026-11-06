@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.contrib.auth import authenticate
+from django.db import connection
+from django_tenants.utils import get_public_schema_name
 from rest_framework import serializers
 from rest_framework_simplejwt.exceptions import AuthenticationFailed, InvalidToken
 from rest_framework_simplejwt.serializers import (
@@ -17,6 +19,7 @@ from accounts.two_factor import (
     request_uses_pre_2fa_token,
     resolve_login_membership,
     role_requires_2fa,
+    stamp_tenant_claims,
     totp_qr_data_uri,
     user_has_confirmed_totp,
     verify_user_totp,
@@ -36,9 +39,10 @@ class EMSTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
     Password login with tenant-aware 2FA gating.
 
-    Resolves SchoolMembership in the current tenant schema (subdomain). Admin
-    and bursar receive a pre_2fa token instead of full JWTs until TOTP succeeds.
-    Teacher and parent receive tokens immediately after password.
+    Resolves SchoolMembership in the current tenant schema (from JWT claim or
+    ``X-Tenant-Slug``). Admin and bursar receive a pre_2fa token instead of
+    full JWTs until TOTP succeeds. Teacher and parent receive tokens
+    immediately after password.
     """
 
     @classmethod
@@ -46,7 +50,7 @@ class EMSTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         # TODO: set school_id from SchoolMembership once multi-membership
         # handling is decided (a user may belong to multiple tenants).
-        token['school_id'] = None
+        stamp_tenant_claims(token, user)
         return token
 
     def validate(self, attrs):
@@ -69,6 +73,17 @@ class EMSTokenObtainPairSerializer(TokenObtainPairSerializer):
         self.user = user
         membership = resolve_login_membership(user)
         if membership is None:
+            # Platform operators have no SchoolMembership. They authenticate
+            # on the public schema only (User.is_platform_admin, no tenant
+            # header). School requests still require an active membership.
+            if (
+                getattr(user, 'is_platform_admin', False)
+                and connection.schema_name == get_public_schema_name()
+            ):
+                data = super().validate(attrs)
+                data['role'] = 'platform_admin'
+                data['requires_2fa'] = False
+                return data
             raise AuthenticationFailed(
                 'No active membership at this school.',
                 code='no_membership',

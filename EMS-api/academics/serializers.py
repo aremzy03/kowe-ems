@@ -7,6 +7,7 @@ from academics.models import (
     Arm,
     ClassLevel,
     ClassSubjectAssignment,
+    ClassTeacherAssignment,
     Enrollment,
     Guardian,
     Session,
@@ -115,6 +116,7 @@ class TermSerializer(serializers.ModelSerializer):
             'start_date',
             'end_date',
             'is_active',
+            'total_school_days',
         )
         read_only_fields = ('id',)
 
@@ -397,6 +399,92 @@ class ClassSubjectAssignmentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     'This subject is already assigned to a teacher for this '
                     'class/arm/term.'
+                )
+
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# Form / class teacher assignment (Phase 3 Prompt 1)
+# ---------------------------------------------------------------------------
+
+
+class ClassTeacherAssignmentSerializer(serializers.ModelSerializer):
+    """
+    Admin CRUD for teacher ↔ class/arm/term (form teacher) assignments.
+
+    ``teacher`` must have an active SchoolMembership with role=teacher in
+    this tenant. Arm must belong to the selected class_level.
+
+    Independent of ``ClassSubjectAssignment`` — subject teaching and form-
+    teacher duties are not auto-linked.
+    """
+
+    teacher_email = serializers.EmailField(source='teacher.email', read_only=True)
+    class_level_name = serializers.CharField(source='class_level.name', read_only=True)
+    arm_name = serializers.CharField(source='arm.name', read_only=True)
+    term_name = serializers.CharField(source='term.name', read_only=True)
+
+    class Meta:
+        model = ClassTeacherAssignment
+        fields = (
+            'id',
+            'teacher',
+            'teacher_email',
+            'class_level',
+            'class_level_name',
+            'arm',
+            'arm_name',
+            'term',
+            'term_name',
+            'created_at',
+        )
+        read_only_fields = (
+            'id',
+            'teacher_email',
+            'class_level_name',
+            'arm_name',
+            'term_name',
+            'created_at',
+        )
+
+    def validate_teacher(self, teacher):
+        membership = SchoolMembership.objects.filter(
+            user_id=teacher.pk,
+            is_active=True,
+            role=SchoolMembership.Role.TEACHER,
+        ).first()
+        if membership is None:
+            raise serializers.ValidationError(
+                'Teacher must have an active teacher SchoolMembership at this school.'
+            )
+        return teacher
+
+    def validate(self, attrs):
+        class_level = attrs.get(
+            'class_level', getattr(self.instance, 'class_level', None)
+        )
+        arm = attrs.get('arm', getattr(self.instance, 'arm', None))
+        term = attrs.get('term', getattr(self.instance, 'term', None))
+
+        if arm is not None and class_level is not None:
+            if arm.class_level_id != class_level.id:
+                raise serializers.ValidationError(
+                    {'arm': 'Arm does not belong to the selected class level.'}
+                )
+
+        # Surface a clear API error before the DB unique constraint fires.
+        if class_level is not None and arm is not None and term is not None:
+            qs = ClassTeacherAssignment.objects.filter(
+                class_level=class_level,
+                arm=arm,
+                term=term,
+            )
+            if self.instance is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    'This class/arm/term already has a class teacher assigned.'
                 )
 
         return attrs

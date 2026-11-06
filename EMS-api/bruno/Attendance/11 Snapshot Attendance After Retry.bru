@@ -1,0 +1,44 @@
+meta {
+  name: 11 Snapshot Attendance After Retry
+  type: http
+  seq: 11
+  tags: [
+    attendance
+    smoke
+    phase3
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/daily/?student={{studentId}}&date={{attendanceDate}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const rows = Array.isArray(body) ? body : body.results || [];
+    bru.setEnvVar("attendanceCountAfterRetry", String(rows.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("retry does not duplicate DailyAttendance rows", function () {
+    expect(Number(bru.getEnvVar("attendanceCountAfterRetry"))).to.equal(
+      Number(bru.getEnvVar("attendanceCountAfterFirst"))
+    );
+    expect(Number(bru.getEnvVar("attendanceCountAfterRetry"))).to.equal(1);
+  });
+}

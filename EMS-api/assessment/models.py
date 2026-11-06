@@ -213,10 +213,11 @@ class AuditLog(models.Model):
     """
     Automatic grade-change trail for Score create/update.
 
-    Lives in ``assessment`` (not a shared core app): audit rows are
-    tenant-scoped, tied to assessment FKs, and only written for score
-    changes — colocating them with Score keeps migrations and retention
-    with the domain that owns the data.
+    Kept in ``assessment`` (not a shared core app): fields are score-specific
+    (Decimal old/new + assessment_component FK). Attendance uses a parallel
+    ``attendance.AttendanceAuditLog`` with the same signal/no-op pattern —
+    schemas differ enough that a shared polymorphic table would dilute type
+    safety without helping Phase 2's existing audit API.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -311,8 +312,13 @@ class TermResultSummary(models.Model):
     Materialized overall average + class position for one student in one term.
 
     ``class_position`` is ranked within the student's active enrollment
-    class_level + arm + term. Recomputed in batch for the whole class so
+    class_level + arm + term.     Recomputed in batch for the whole class so
     ranks stay consistent; never updated on individual Score saves.
+
+    ``is_published`` is the parent release gate. Recompute creates rows
+    unpublished and does not clear the flag. Parents see the summary,
+    subject totals, and report-card PDF only after an admin publishes
+    the class. Admin and teacher reads ignore the flag.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -342,6 +348,19 @@ class TermResultSummary(models.Model):
     teacher_remark = models.TextField(blank=True, default='')
     admin_remark = models.TextField(blank=True, default='')
     computed_at = models.DateTimeField(default=timezone.now)
+    is_published = models.BooleanField(
+        default=False,
+        help_text=(
+            'Parents and the report-card download see this summary only '
+            'after an admin publishes the class. Teachers and admins '
+            'always see it.'
+        ),
+    )
+    published_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Set when an admin publishes this summary. Null until then.',
+    )
 
     class Meta:
         ordering = ['term', 'class_position', 'student']

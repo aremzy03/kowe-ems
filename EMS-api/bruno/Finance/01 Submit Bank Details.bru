@@ -1,0 +1,59 @@
+meta {
+  name: 01 Submit Bank Details
+  type: http
+  seq: 1
+  tags: [
+    finance
+    smoke
+    phase4
+    paystack
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/finance/payment-account/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "bank_code": "057",
+    "account_number": "0000000000"
+  }
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 201) {
+    if (body.subaccount_code) {
+      bru.setEnvVar("subaccountCode", body.subaccount_code);
+    }
+    if (body.account_number) {
+      bru.setEnvVar("maskedAccountNumber", body.account_number);
+    }
+  }
+}
+
+tests {
+  test("onboard created or already exists (Paystack test bank 057 / 0000000000)", function () {
+    const status = res.getStatus();
+    expect(status === 201 || status === 409).to.equal(true);
+    if (status === 201) {
+      const body = res.getBody();
+      expect(body.is_verified).to.equal(true);
+      expect(body.is_active).to.equal(true);
+      expect(body.account_number).to.equal("****0000");
+      expect(String(body.account_number)).to.not.contain("0000000000");
+      expect(body.account_name).to.be.a("string");
+      expect(body.subaccount_code).to.be.a("string");
+    }
+  });
+}

@@ -6,6 +6,7 @@ from assessment.views import (
     AuditLogViewSet,
     BroadsheetView,
     MyAssessmentComponentsView,
+    PublishClassResultsView,
     RecomputeClassResultsView,
     ReportCardPDFView,
     ScoreViewSet,
@@ -32,6 +33,11 @@ urlpatterns = [
         'results/recompute/',
         RecomputeClassResultsView.as_view(),
         name='recompute-class-results',
+    ),
+    path(
+        'results/publish/',
+        PublishClassResultsView.as_view(),
+        name='publish-class-results',
     ),
     path(
         'results/student/',

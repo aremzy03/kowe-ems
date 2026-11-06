@@ -16,7 +16,7 @@ post {
 }
 
 headers {
-  Host: {{tenantHost}}
+  X-Tenant-Slug: {{tenantSlug}}
   Content-Type: application/json
   Accept: application/json
   Authorization: Bearer {{bursarPreAuthToken}}

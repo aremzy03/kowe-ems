@@ -1,0 +1,79 @@
+meta {
+  name: 02 Invoice Notifications Queued
+  type: http
+  seq: 2
+  tags: [
+    communications
+    smoke
+    phase5
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/communications/notifications/?trigger_type=invoice_generated
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (res.status === 200 && Array.isArray(body)) {
+    const invoiceId = String(bru.getEnvVar("parentInvoiceId"));
+    const email = body.find(
+      (row) =>
+        String(row.related_object_id) === invoiceId && row.channel === "email"
+    );
+    if (email) {
+      bru.setEnvVar("invoiceEmailNotificationId", email.id);
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("linked parent gets an invoice email and no WhatsApp without a phone", function () {
+    const body = res.getBody();
+    expect(Array.isArray(body)).to.equal(true);
+    for (const row of body) {
+      expect(row.trigger_type).to.equal("invoice_generated");
+    }
+    const invoiceId = String(bru.getEnvVar("parentInvoiceId"));
+    const parentEmail = String(bru.getEnvVar("parentEmail") || "").toLowerCase();
+    const mine = body.filter((row) => String(row.related_object_id) === invoiceId);
+    const email = mine.filter((row) => row.channel === "email");
+    const whatsapp = mine.filter((row) => row.channel === "whatsapp");
+    expect(email.length).to.equal(1);
+    expect(whatsapp.length).to.equal(0);
+    const row = email[0];
+    expect(row.id).to.equal(bru.getEnvVar("invoiceEmailNotificationId"));
+    expect(row.recipient_email.toLowerCase()).to.equal(parentEmail);
+    expect(row.recipient_name).to.equal("Bruno Parent");
+    expect(row.trigger_type).to.equal("invoice_generated");
+    expect(row.status === "queued" || row.status === "sent").to.equal(true);
+    expect(row).to.have.property("recipient");
+    expect(row).to.have.property("error_message");
+    expect(row).to.have.property("sent_at");
+    expect(row).to.have.property("created_at");
+    if (row.status === "queued") {
+      expect(row.sent_at).to.equal(null);
+      expect(row.error_message).to.equal(null);
+    }
+  });
+}
+
+docs {
+  Redeem creates the parent's Guardian with a blank phone. The phone on
+  the student form belongs to an unclaimed guardian, so WhatsApp is not
+  applicable and only the email row is queued. Status stays queued unless
+  a Celery worker is already consuming the broker; sent is accepted then.
+  This request does not start a worker and does not require SMTP.
+}

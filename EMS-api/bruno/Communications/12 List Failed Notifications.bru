@@ -1,0 +1,90 @@
+meta {
+  name: 12 List Failed Notifications
+  type: http
+  seq: 12
+  tags: [
+    communications
+    smoke
+    phase5
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/communications/notifications/?status=failed
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (res.status !== 200 || !Array.isArray(body)) {
+    return;
+  }
+  const ours = [
+    bru.getEnvVar("parentInvoiceId"),
+    bru.getEnvVar("manualPaymentId"),
+    bru.getEnvVar("resultSummaryId"),
+  ]
+    .filter(Boolean)
+    .map(String);
+  const failedOurs = body.filter(
+    (row) =>
+      row.status === "failed" && ours.indexOf(String(row.related_object_id)) !== -1
+  );
+  if (failedOurs.length) {
+    const row = failedOurs[0];
+    bru.setEnvVar("failedNotificationId", row.id);
+    bru.setEnvVar("resendTargetId", row.id);
+    bru.setEnvVar("resendExpectStatus", "200");
+    bru.setEnvVar("resendRelatedObjectId", String(row.related_object_id));
+    bru.setEnvVar("resendChannel", row.channel);
+    bru.setEnvVar("resendTriggerType", row.trigger_type);
+    bru.setEnvVar("resendMatchCount", "1");
+    return;
+  }
+  bru.setEnvVar("failedNotificationId", "");
+  bru.setEnvVar("resendTargetId", bru.getEnvVar("invoiceEmailNotificationId"));
+  bru.setEnvVar("resendExpectStatus", "400");
+  bru.setEnvVar("resendRelatedObjectId", bru.getEnvVar("parentInvoiceId"));
+  bru.setEnvVar("resendChannel", "email");
+  bru.setEnvVar("resendTriggerType", "invoice_generated");
+  bru.setEnvVar("resendMatchCount", "1");
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("failed filter returns only failed rows", function () {
+    const body = res.getBody();
+    expect(Array.isArray(body)).to.equal(true);
+    for (const row of body) {
+      expect(row.status).to.equal("failed");
+      expect(row.error_message === null || typeof row.error_message === "string").to.equal(
+        true
+      );
+    }
+    const mode = bru.getEnvVar("resendExpectStatus");
+    expect(mode === "200" || mode === "400").to.equal(true);
+    expect(bru.getEnvVar("resendTargetId")).to.be.a("string");
+    expect(bru.getEnvVar("resendTargetId").length).to.be.at.least(1);
+  });
+}
+
+docs {
+  Admin list, newest created_at first, AND-combined filters. This request
+  uses status=failed. With Celery stopped, invoice, payment, and result
+  rows stay queued, so this list often has none of today's rows. Request
+  13 then calls resend on the queued invoice email and expects 400
+  ("Only failed notifications can be resent."). If a worker has already
+  marked one of this run's rows failed (blank WhatsApp number), request
+  13 re-queues that same id and expects 200. Neither path requires SMTP
+  or a live WhatsApp token.
+}

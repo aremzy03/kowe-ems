@@ -4,10 +4,12 @@ from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from academics.class_teacher_assignments import class_teacher_assignments_for_teacher
 from academics.models import (
     Arm,
     ClassLevel,
     ClassSubjectAssignment,
+    ClassTeacherAssignment,
     Enrollment,
     Session,
     Student,
@@ -23,6 +25,7 @@ from academics.serializers import (
     ArmSerializer,
     ClassLevelSerializer,
     ClassSubjectAssignmentSerializer,
+    ClassTeacherAssignmentSerializer,
     EnrollmentSerializer,
     LinkingCodeRedeemSerializer,
     SessionSerializer,
@@ -144,8 +147,27 @@ class ClassSubjectAssignmentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsSchoolAdmin]
 
 
+class ClassTeacherAssignmentViewSet(viewsets.ModelViewSet):
+    """
+    Admin CRUD for which teacher is form/class teacher for a class/arm/term.
+
+    Teachers use ``MyClassTeacherAssignmentsView`` (read-only, own rows only).
+    Independent of subject-teacher assignments.
+    """
+
+    queryset = ClassTeacherAssignment.objects.select_related(
+        'teacher',
+        'class_level',
+        'arm',
+        'term',
+        'term__session',
+    ).all()
+    serializer_class = ClassTeacherAssignmentSerializer
+    permission_classes = [IsSchoolAdmin]
+
+
 # ---------------------------------------------------------------------------
-# Teacher-scoped assignment list (Phase 2 Prompt 1)
+# Teacher-scoped assignment lists (Phase 2 Prompt 1 / Phase 3 Prompt 1)
 # ---------------------------------------------------------------------------
 
 
@@ -167,6 +189,27 @@ class MyClassSubjectAssignmentsView(APIView):
             'subject__name',
         )
         data = ClassSubjectAssignmentSerializer(qs, many=True).data
+        return Response({'count': len(data), 'results': data})
+
+
+class MyClassTeacherAssignmentsView(APIView):
+    """
+    GET /api/academics/my-classes/
+
+    Read-only list of ClassTeacherAssignment rows for the authenticated
+    teacher — the class/arm/term combos where they are the form teacher.
+    Distinct from ``my-assignments/`` (subject teaching).
+    """
+
+    permission_classes = [IsTeacher]
+
+    def get(self, request, *args, **kwargs):
+        qs = class_teacher_assignments_for_teacher(request.user).order_by(
+            'term__start_date',
+            'class_level__name',
+            'arm__name',
+        )
+        data = ClassTeacherAssignmentSerializer(qs, many=True).data
         return Response({'count': len(data), 'results': data})
 
 

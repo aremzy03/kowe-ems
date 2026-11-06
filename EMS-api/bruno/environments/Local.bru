@@ -1,55 +1,112 @@
 vars {
   baseUrl: http://127.0.0.1:8000
+  tenantSlug: testacademy
   tenantHost: testacademy.localhost
-  accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzMwOTc1LCJpYXQiOjE3ODc3MzAwNzUsImp0aSI6ImQwYWVhNWRhMjJmOTRmOTQ4ZjdhMjFhZDM3NzVkOGViIiwidXNlcl9pZCI6ImNmYTg4YTYyLWJiMmMtNGI5Mi1hZWJlLWE3NGM1MzAwYjk3NSIsInNjaG9vbF9pZCI6bnVsbH0.88vpdmEgcUJGqAglwiiYMF2AgNAINkb_mkMs6oLoV30
-  preAuthToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzMwNjc3LCJpYXQiOjE3ODc3MzAwNzcsImp0aSI6ImY5NzEyN2E4MWFiZTRiOTVhYzUyNjA3MTQ4NGZjMDA3IiwidXNlcl9pZCI6ImM0OTllMTJmLTA1MTYtNDM0Yy04OTE5LTY2ZjViNGRlMGM1NyIsImVtc19wdXJwb3NlIjoicHJlXzJmYSIsInNjaG9vbF9pZCI6bnVsbH0.0Uvg5UiKt3pt06J9RP519B9pMk3VyA21MTjCctPRKfw
-  csrfToken: pbmtGaePXQcqL9D0udJign9qY5LZn7Wn
-  inviteToken: CFTG6Bm1OLUzqmka5cbxIO8-zovvLFFXAAFTP9EJWWQ
-  inviteAcceptUrl: http://testacademy.localhost/accept-invite?token=CFTG6Bm1OLUzqmka5cbxIO8-zovvLFFXAAFTP9EJWWQ
-  staffInviteEmail: teacher.bruno.mt9sbuhp@example.com
+  platformHost: localhost
+  accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzU4ODQzLCJpYXQiOjE3ODc3NTc5NDMsImp0aSI6IjRmMmQ2MzJkZWRiZjRmZWFiOTE0ZWQ1NTM2ZGY3MzI4IiwidXNlcl9pZCI6ImNmYTg4YTYyLWJiMmMtNGI5Mi1hZWJlLWE3NGM1MzAwYjk3NSIsInNjaG9vbF9pZCI6bnVsbH0.Bs_gZd3zu7Au0fL0Fpr5JIBfDtqlPNpp-TMTJ0F_PYk
+  preAuthToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzU4NTQ1LCJpYXQiOjE3ODc3NTc5NDUsImp0aSI6IjRmYjAwN2Y1YjZjZTRjMDNhYWYxNTA5ODM1NGI0MzViIiwidXNlcl9pZCI6IjBlYjFmOGY0LTQ1MDUtNDU1Zi05NzY5LWRjMDNkN2I3NDhjOSIsImVtc19wdXJwb3NlIjoicHJlXzJmYSIsInNjaG9vbF9pZCI6bnVsbH0.nl5ckmvzsxXOV_u3jH3T8v_7kvKt3BG5oKeFsb7VvAc
+  csrfToken: dfN1y0UYy4bQdwN0kUZpmBDovbCReEqJ
+  inviteToken: 2oIGFcsCdf1XllmBOywEp4KHA0v9nQ0M-JbM7wnedyA
+  inviteAcceptUrl: http://testacademy.localhost/accept-invite?token=2oIGFcsCdf1XllmBOywEp4KHA0v9nQ0M-JbM7wnedyA
+  staffInviteEmail: teacher.bruno.mta8x5fc@example.com
   staffInvitePassword: StaffInvitePass123!
-  bursarEmail: bursar.bruno.mt9sbv6z@example.com
+  bursarEmail: bursar.bruno.mta8x63p@example.com
   bursarPassword: BursarPass123!
-  bursarPreAuthToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzMwNjc3LCJpYXQiOjE3ODc3MzAwNzcsImp0aSI6ImY5NzEyN2E4MWFiZTRiOTVhYzUyNjA3MTQ4NGZjMDA3IiwidXNlcl9pZCI6ImM0OTllMTJmLTA1MTYtNDM0Yy04OTE5LTY2ZjViNGRlMGM1NyIsImVtc19wdXJwb3NlIjoicHJlXzJmYSIsInNjaG9vbF9pZCI6bnVsbH0.0Uvg5UiKt3pt06J9RP519B9pMk3VyA21MTjCctPRKfw
-  totpSecret: XQBDBUOHN5VWINVVG3NTXATVW33WHD3T
-  parentEmail: parent.bruno.mt9sbwjk@example.com
+  bursarPreAuthToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzU4NTQ1LCJpYXQiOjE3ODc3NTc5NDUsImp0aSI6IjRmYjAwN2Y1YjZjZTRjMDNhYWYxNTA5ODM1NGI0MzViIiwidXNlcl9pZCI6IjBlYjFmOGY0LTQ1MDUtNDU1Zi05NzY5LWRjMDNkN2I3NDhjOSIsImVtc19wdXJwb3NlIjoicHJlXzJmYSIsInNjaG9vbF9pZCI6bnVsbH0.nl5ckmvzsxXOV_u3jH3T8v_7kvKt3BG5oKeFsb7VvAc
+  totpSecret: WHAHGZBPWL7TNZSJHMYO6FU2NQJZMDRD
+  parentEmail: parent.bruno.mta8ynu9@example.com
   parentPassword: ParentPass123!
-  parentAccessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzMwOTgwLCJpYXQiOjE3ODc3MzAwODAsImp0aSI6IjViNGE3N2FmMTdkZjRmMDZiM2U2NWFlZDYxZWJlN2M1IiwidXNlcl9pZCI6IjU5NWVlZTJkLWQ2MzQtNGY4Ni04ZDRlLWM1ZTNmODJhNDFmOSIsInNjaG9vbF9pZCI6bnVsbH0.gAOvj46Pa7l-M8BXTYiSWmcgqentkCTJtcJSu9tu7SY
-  linkingCode: N4SK4V95
-  sessionId: f14f1b06-905e-4c43-bf30-74decb7f566e
-  termId: 77135422-a0c1-49f8-9571-88946bb1da72
-  classLevelId: e78af231-83a3-4a67-9feb-6349697a8c70
-  armId: f8d42427-fb60-49ee-b4de-782728313356
-  subjectId: 8c569acd-d270-4b67-8920-0d5f2cbdca51
-  studentId: 9ac15dd4-7722-4b5f-bf29-c31c7eb8846d
-  enrollmentId: ade6df73-0550-4146-950c-61be0d9e2825
-  admissionNumber: ADM-BRU-MT9SBYG5
+  parentAccessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzU4OTE1LCJpYXQiOjE3ODc3NTgwMTUsImp0aSI6ImYwMGFmYjYwMjBiNzRlMDI4NWE0ZWM3Zjc3NGEzMDcyIiwidXNlcl9pZCI6ImJmNDczMzE4LTgyNDItNDQ3OC04YTE0LWFhZTgzOGE5ZmJmNCIsInNjaG9vbF9pZCI6bnVsbH0.gVPvKbDP1Sg52Ov4vhvXeZZ6u8HQHNuN_2AaVzHr0Fs
+  linkingCode: 65U2GWK2
+  sessionId: 9092741e-461f-460d-831d-42c85a527515
+  termId: c4179164-a5f9-4c24-b505-bf33afe5800e
+  classLevelId: c9dce177-09e3-4bdb-9d4a-26919e3eaa27
+  armId: 96a8d8e5-cdc6-46bb-bc27-59a04f0abc2c
+  subjectId: 890530e7-2498-44ac-a7d7-23738e59a6b2
+  studentId: 60a9072c-677f-446e-9354-cb48b52ca8e2
+  enrollmentId: 4effccc1-a66b-4f6b-a571-1e4c5b808a2b
+  admissionNumber: ADM-BRU-MTA8YPPA
   enrollmentRequired: false
   requires2fa: true
   bursarEnrollmentRequired: true
-  bursarAccessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzMwOTc3LCJpYXQiOjE3ODc3MzAwNzcsImp0aSI6IjAxZTJmYmY5YjE5ZTQ5MmJiOWY2MmEzMTc1YzI1OGNkIiwidXNlcl9pZCI6ImM0OTllMTJmLTA1MTYtNDM0Yy04OTE5LTY2ZjViNGRlMGM1NyIsInNjaG9vbF9pZCI6bnVsbH0.06ibBCxmTiBy6n_X86A2qqCamPR370Lu7ggxAkHvKr0
-  refreshedAccessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzMwOTc4LCJpYXQiOjE3ODc3MzAwNzgsImp0aSI6IjNjODA1MDkwZTVjMzRiMTk4MmI3M2NjYzNkY2E3M2U0IiwidXNlcl9pZCI6ImM0OTllMTJmLTA1MTYtNDM0Yy04OTE5LTY2ZjViNGRlMGM1NyIsInNjaG9vbF9pZCI6bnVsbH0.ZtPYn7Chf_o7GW7zRGnumBCSFynBlNY2qMv3bT7C1mc
-  sessionName: 2026/2027-Bruno-mt9sby4x
-  classLevelName: JSS1-Bruno-mt9sby8o
-  subjectCode: MTH9SBYD7
-  teacherUserId: 65be4a29-9e1e-4d54-bb8b-90fce19122ea
-  teacherAccessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzMxMDUwLCJpYXQiOjE3ODc3MzAxNTAsImp0aSI6IjNiODNjNmE2ZmVhNzRmNzU4MTE0MjRjYjA2Y2ZhMmMzIiwidXNlcl9pZCI6IjY1YmU0YTI5LTllMWUtNGQ1NC1iYjhiLTkwZmNlMTkxMjJlYSIsInNjaG9vbF9pZCI6bnVsbH0.U_hYzgHzAhftjs34cFveJhMv4-6IQNdBCA9mheaRLYw
-  assignmentId: b0b8806b-a17c-4e40-ad0b-cf7a5d468273
-  component1stCaId: 9362a881-e1d1-4bd4-9bf2-9bba9137766f
-  component2ndCaId: f408cf83-c97b-4a31-95bb-603cd75ccde7
-  componentExamId: 8bc10fef-aa05-426e-aece-b2d711204ba8
-  scoreCountBefore: 9
+  bursarAccessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzU4ODQ1LCJpYXQiOjE3ODc3NTc5NDUsImp0aSI6IjE3ZDZhMWI4ZjliMzQ5NWM4NzlkNGEzZmZiNzY0NjJhIiwidXNlcl9pZCI6IjBlYjFmOGY0LTQ1MDUtNDU1Zi05NzY5LWRjMDNkN2I3NDhjOSIsInNjaG9vbF9pZCI6bnVsbH0.cv4F9suqenFEslqd3zehZ4xmFzqc14v1LXALfavyqmM
+  refreshedAccessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzU4ODQ1LCJpYXQiOjE3ODc3NTc5NDUsImp0aSI6IjYzNzlkOWJjMTJkMDQ3MDU4YjI2MzFhODczMWJlMTg3IiwidXNlcl9pZCI6IjBlYjFmOGY0LTQ1MDUtNDU1Zi05NzY5LWRjMDNkN2I3NDhjOSIsInNjaG9vbF9pZCI6bnVsbH0.wxwtV70SIVLxBo1cBIbIMphnqi35hB7KTX2pz6GA2QM
+  sessionName: 2026/2027-Bruno-mta8ypc3
+  classLevelName: JSS1-Bruno-mta8ypgw
+  subjectCode: MTHA8YPLY
+  teacherUserId: 21a3ad5d-7e01-4e70-890b-c18e247cb155
+  teacherAccessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg3NzQ2NTI5LCJpYXQiOjE3ODc3NDU2MjksImp0aSI6ImRiZDQ4MjExZTllMjQ0MWU5MjkzMDM3ZmZiNmU3ZjYwIiwidXNlcl9pZCI6Ijk5NWQzNmY2LWM1ZjItNGQ1My1hYTY0LWZhODc3OTNlMjk3MiIsInNjaG9vbF9pZCI6bnVsbH0.jCpF7RwjAe6MC0Mbf0qWPdxEpJ7vPXvlmHZ4vZ6KffM
+  assignmentId: 7ea84176-f388-41b6-930f-b79a585cbc00
+  component1stCaId: 70f99621-121e-4638-a31e-a7e6125e270f
+  component2ndCaId: 3d9f4b1d-0b8a-4f9f-b32c-1a2f8a63f7fa
+  componentExamId: ef71c457-0954-4b74-bc00-00942a08365b
+  scoreCountBefore: 15
   auditCountBefore: 0
   bulkSucceededFirst: 3
   scoreCountAfterFirst: 3
-  scoreCountTotalAfterFirst: 12
+  scoreCountTotalAfterFirst: 18
   auditCountAfterFirst: 3
   scoreCountAfterRetry: 3
-  scoreCountTotalAfterRetry: 12
+  scoreCountTotalAfterRetry: 18
   auditCountAfterRetry: 3
-  unlinkedAdmissionNumber: ADM-UNL-MT9SDH3D
-  unlinkedStudentId: 9289feda-b0dc-47ce-9bf8-83bfa5dacc7f
-  unassignedSubjectCode: ENG9SONZM
-  unassignedSubjectId: 4516db25-2093-46ea-88dc-17785c58533a
-  unassignedComponent1stCaId: 06296f36-5952-4393-9c79-9f64a931f1bd
+  unlinkedAdmissionNumber: ADM-UNL-MTA1L5FW
+  unlinkedStudentId: f80d2b37-1a80-42ac-bfb9-f8d17e3ea414
+  unassignedSubjectCode: ENGA1L6K7
+  unassignedSubjectId: 0a70b547-d461-4201-a2b2-90307d58f19b
+  unassignedComponent1stCaId: 04d367eb-3498-44f0-ad59-2ae3ed9e39bb
+  termTotalSchoolDays: 60
+  classTeacherAssignmentId: d24d84bf-2fbb-4b2a-b97f-4c8fc98cc515
+  attendanceDate: 2026-09-15
+  attendanceCountBefore: 0
+  attendanceAuditCountBefore: 0
+  attendanceBulkSucceededFirst: 1
+  dailyAttendanceId: c48b229e-d41b-48da-aa01-85bd5a2f383a
+  attendanceCountAfterFirst: 1
+  attendanceAuditCountAfterFirst: 1
+  attendanceCountAfterRetry: 1
+  attendanceAuditCountAfterRetry: 1
+  unassignedArmId: e2e44957-657a-4646-9e03-c67fcac34c6d
+  unassignedArmAdmissionNumber: ADM-ARM-MTA1L8CE
+  unassignedArmStudentId: 7e6203ca-4be8-4b50-a9f8-b6681dc7ea41
+  unassignedArmEnrollmentId: ec0ddb50-53fb-496f-81c7-55992333b76f
+  attendanceUnlinkedAdmissionNumber: ADM-ATL-MTA1L8MH
+  attendanceUnlinkedStudentId: b3ef6edb-fa47-47a9-ae59-87c06ee9bcbb
+  subaccountCode: ACCT_bruno_local_stub
+  maskedAccountNumber: ****0000
+  paymentAccountId: 7240d204-aa15-4aea-a871-97eaf97fcfe9
+  tuitionFeeName: Tuition-Bruno-mta90bx2
+  tuitionFeeId: 08fa7820-48c5-4ed7-aa14-0611477d33e3
+  ptaFeeName: PTA-Bruno-mta90c00
+  ptaFeeId: cba29244-177f-4873-8928-ce0c035a572a
+  cashAdmissionNumber: ADM-CASH-MTA90C34
+  cashStudentId: c040a0a8-30a4-45f2-b804-52c9eeaf74d4
+  cashEnrollmentId: 8de9a3a6-a46f-487d-a617-e8b36a47b314
+  invoiceCreatedCount: 1
+  invoiceSkippedCount: 2
+  parentInvoiceId: 8ce8fcc4-e037-4f08-a126-05ffad73db30
+  parentInvoiceTotal: 105000.00
+  cashInvoiceId: a08ec2d7-c1bc-483e-878d-88ae73b89f3a
+  cashInvoiceTotal: 160000.00
+  parentInvoiceStatusBeforePay: unpaid
+  parentInvoicePaidBeforePay: 0.00
+  paymentReference: pay_d0c8f48b454d4a67a0eb9a463b167c5e
+  paymentId: 4216e18c-1ff4-4175-b2b0-8cfd1d73a107
+  authorizationUrl: https://checkout.paystack.com/stub_pay_d0c8f48b454d4a67a0eb9a463b167c5e
+  invoiceStatusAfterInit: unpaid
+  paymentStatusAfterInit: pending
+  paymentAmountKobo: 10500000
+  paymentAmountNaira: 105000.00
+  parentInvoicePaidAfterInit: 0.00
+  parentInvoiceStatusAfterInit: unpaid
+  webhookRawBody: {"event":"charge.success","data":{"id":424242,"status":"success","reference":"pay_d0c8f48b454d4a67a0eb9a463b167c5e","amount":10500000,"currency":"NGN","subaccount":{"subaccount_code":"ACCT_bruno_local_stub"}}}
+  paymentStatusAfterVerify: success
+  invoiceStatusAfterVerify: paid
+  parentInvoicePaidAfterVerify: 105000.00
+  parentInvoiceStatusAfterVerify: paid
+  webhookSignature: b153184788e1bf4084b0705be0d0437f2967887ff1d3e2ad0b52a53a09cf559640aeb1a95f89b1a04d25b525c630db3f34fd42c3787fd4c951ce47d8cfad648e
+  parentInvoicePaidAfterWebhook1: 105000.00
+  parentInvoicePaidAfterWebhook2: 105000.00
+  manualPaymentId: 01e946a8-de2e-4b73-adf4-db757bc81d2f
+  manualPaymentReference: manual-ad809e24c9f5449d8ef1b854acfb59b8
+  cashInvoiceStatusAfterManual: paid
 }

@@ -20,6 +20,7 @@ from assessment.services import (
     assert_actor_may_view_student_term_results,
     build_broadsheet,
     clone_scheme,
+    publish_class_term_results,
     recompute_class_term_summaries,
     replace_scheme,
     upsert_score,
@@ -472,6 +473,8 @@ class TermResultSummarySerializer(serializers.ModelSerializer):
             'teacher_remark',
             'admin_remark',
             'computed_at',
+            'is_published',
+            'published_at',
         )
         read_only_fields = fields
 
@@ -514,6 +517,36 @@ class RecomputeClassResultsSerializer(serializers.Serializer):
     def create(self, validated_data):
         try:
             return recompute_class_term_summaries(
+                class_level=validated_data['class_level'],
+                arm=validated_data['arm'],
+                term=validated_data['term'],
+            )
+        except DjangoValidationError as exc:
+            raise _drf_validation_error(exc) from exc
+
+
+class PublishClassResultsSerializer(serializers.Serializer):
+    """
+    Admin release of one class arm's term results.
+
+    Does not recompute. Summaries must already exist from
+    ``POST /api/assessment/results/recompute/``.
+    """
+
+    class_level = serializers.PrimaryKeyRelatedField(queryset=ClassLevel.objects.all())
+    arm = serializers.PrimaryKeyRelatedField(queryset=Arm.objects.all())
+    term = serializers.PrimaryKeyRelatedField(queryset=Term.objects.all())
+
+    def validate(self, attrs):
+        if attrs['arm'].class_level_id != attrs['class_level'].pk:
+            raise serializers.ValidationError(
+                {'arm': 'Arm does not belong to the given class level.'}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        try:
+            return publish_class_term_results(
                 class_level=validated_data['class_level'],
                 arm=validated_data['arm'],
                 term=validated_data['term'],

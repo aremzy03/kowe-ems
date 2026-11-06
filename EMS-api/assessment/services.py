@@ -15,6 +15,7 @@ Broadsheet (Prompt 5) is a read-only grid: live weighted subject totals from
 current Scores for table display; ranks still require explicit recompute.
 """
 
+import logging
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.exceptions import ValidationError
@@ -33,6 +34,8 @@ from assessment.models import (
 )
 from memberships.models import SchoolMembership
 from memberships.permissions import resolve_request_membership
+
+logger = logging.getLogger(__name__)
 
 TWOPLACES = Decimal('0.01')
 
@@ -448,6 +451,10 @@ def recompute_class_term_summaries(*, class_level, arm, term):
 
     Ranking is competition-style within this class_level + arm + term.
     Remarks on existing TermResultSummary rows are preserved.
+
+    ``is_published`` and ``published_at`` are preserved. Recompute does
+    not release results and does not queue parent notifications. New
+    summary rows stay unpublished (model default).
     """
     class_level_id = class_level.pk if hasattr(class_level, 'pk') else class_level
     arm_id = arm.pk if hasattr(arm, 'pk') else arm
@@ -533,6 +540,8 @@ def recompute_class_term_summaries(*, class_level, arm, term):
                 'overall_average': row['overall_average'],
                 'class_position': position,
                 'computed_at': now,
+                # Publication is an admin action. Omit is_published and
+                # published_at so a recompute cannot release or retract.
             },
         )
         summaries.append(summary)
@@ -854,3 +863,143 @@ def assert_actor_may_view_student_term_results(*, request, student, term):
         raise ValidationError(
             'You are not assigned to teach this student\'s class/arm/term.'
         )
+
+
+def _ids(value):
+    return value.pk if hasattr(value, 'pk') else value
+
+
+def _parent_users_for_student(student_id):
+    """Users linked to this student through Guardian. Skips unclaimed profiles."""
+    from academics.models import StudentGuardianLink
+
+    links = (
+        StudentGuardianLink.objects.filter(
+            student_id=student_id,
+            guardian__user__isnull=False,
+        )
+        .select_related('guardian__user')
+        .order_by('guardian_id')
+    )
+    users = []
+    seen = set()
+    for link in links:
+        user = link.guardian.user
+        if user is None or user.pk in seen:
+            continue
+        seen.add(user.pk)
+        users.append(user)
+    return users
+
+
+def _queue_result_published_notifications(summary_ids):
+    """
+    Queue email and WhatsApp for each linked parent of these summaries.
+
+    Called from ``transaction.on_commit`` after the publish write commits,
+    so ``send_*`` inserts its NotificationLog outside that transaction and
+    the worker cannot start before the log row commits. One recipient
+    failure is logged and skipped; it does not roll back publication and
+    does not stop the other parents.
+    """
+    from communications.email_service import EmailNotificationService
+    from communications.whatsapp_service import WhatsAppNotificationService
+
+    email = EmailNotificationService()
+    whatsapp = WhatsAppNotificationService()
+    summaries = (
+        TermResultSummary.objects.select_related('student', 'term')
+        .filter(pk__in=summary_ids, is_published=True)
+        .order_by('pk')
+    )
+    for summary in summaries:
+        for parent in _parent_users_for_student(summary.student_id):
+            for send in (
+                email.send_result_published,
+                whatsapp.send_result_published,
+            ):
+                try:
+                    send(summary, parent)
+                except Exception:
+                    logger.exception(
+                        'Could not queue result_published notification '
+                        'for summary %s recipient %s',
+                        summary.pk,
+                        parent.pk,
+                    )
+
+
+def publish_class_term_results(*, class_level, arm, term):
+    """
+    Publish every TermResultSummary for the active class arm in this term.
+
+    Sets ``is_published`` and ``published_at`` on each existing summary.
+    Parents of a summary that was not already published are notified once,
+    on commit, via email and WhatsApp. Publishing again refreshes
+    ``published_at`` and does not queue another notification.
+
+    Students with no summary yet are counted and left alone — recompute
+    first. An empty class, or a class with no summaries at all, is an error.
+    """
+    class_level_id = _ids(class_level)
+    arm_id = _ids(arm)
+    term_id = _ids(term)
+
+    student_ids = list(
+        Enrollment.objects.filter(
+            class_level_id=class_level_id,
+            arm_id=arm_id,
+            term_id=term_id,
+            status=Enrollment.Status.ACTIVE,
+        ).values_list('student_id', flat=True)
+    )
+    if not student_ids:
+        raise ValidationError(
+            'No active enrollments for this class, arm, and term.'
+        )
+
+    now = timezone.now()
+    with transaction.atomic():
+        summaries = list(
+            TermResultSummary.objects.select_for_update()
+            .filter(student_id__in=student_ids, term_id=term_id)
+            .order_by('pk')
+        )
+        if not summaries:
+            raise ValidationError(
+                'No TermResultSummary rows for this class. '
+                'Run POST /api/assessment/results/recompute/ before publishing.'
+            )
+        notify_ids = [row.pk for row in summaries if not row.is_published]
+        for row in summaries:
+            row.is_published = True
+            row.published_at = now
+        TermResultSummary.objects.bulk_update(
+            summaries,
+            ['is_published', 'published_at'],
+        )
+        if notify_ids:
+            # robust=True: a broker error must not turn a committed publish
+            # into an HTTP 500. Per-recipient errors are logged inside.
+            transaction.on_commit(
+                lambda ids=tuple(notify_ids): _queue_result_published_notifications(ids),
+                robust=True,
+            )
+        published_ids = [row.pk for row in summaries]
+        summarized_student_ids = {row.student_id for row in summaries}
+
+    fresh = list(
+        TermResultSummary.objects.select_related('student', 'term')
+        .filter(pk__in=published_ids)
+        .order_by('class_position', 'student__last_name', 'student_id')
+    )
+    return {
+        'class_level_id': class_level_id,
+        'arm_id': arm_id,
+        'term_id': term_id,
+        'published_count': len(fresh),
+        'newly_published_count': len(notify_ids),
+        'students_without_summary': len(set(student_ids) - summarized_student_ids),
+        'published_at': now,
+        'summaries': fresh,
+    }

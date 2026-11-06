@@ -5,8 +5,10 @@
 #
 # If a standalone container named ems-postgres is already bound to 5433,
 # do not start the `db` service (or stop that container first):
-#   docker compose up web redis
+#   docker compose up web redis worker
 # Host-run Django (.venv + manage.py) should keep DB_HOST=localhost.
+# `worker` consumes Celery tasks (communications.send_notification). It
+# does not send inside the web request.
 
 services:
   db:
@@ -48,6 +50,25 @@ services:
     volumes:
       - .:/app
     command: python manage.py runserver 0.0.0.0:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.local
+      DB_HOST: db
+      DB_PORT: '5432'
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    command: celery -A config worker --loglevel=info
     depends_on:
       db:
         condition: service_healthy

@@ -17,10 +17,22 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from finance.webhooks import paystack_webhook
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('accounts.urls')),
     path('api/memberships/', include('memberships.urls')),
     path('api/academics/', include('academics.urls')),
     path('api/assessment/', include('assessment.urls')),
+    path('api/attendance/', include('attendance.urls')),
+    path('api/finance/', include('finance.urls')),
+    path('api/communications/', include('communications.urls')),
+    path('api/platform/', include('platform_admin.urls')),
+    path(
+        'api/webhooks/paystack/',
+        paystack_webhook,
+        name='paystack-webhook',
+    ),
 ]
+

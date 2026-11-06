@@ -1,0 +1,60 @@
+meta {
+  name: 14 Invalid HMAC Webhook Rejected
+  type: http
+  seq: 14
+  tags: [
+    finance
+    smoke
+    phase4
+    webhook
+    hmac
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/webhooks/paystack/
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+  X-Paystack-Signature: deadbeef
+}
+
+body:text {
+  {}
+}
+
+script:pre-request {
+  function chargeSuccessRaw() {
+    const existing = bru.getEnvVar("webhookRawBody");
+    if (existing) return existing;
+    const payload = {
+      event: "charge.success",
+      data: {
+        id: 424242,
+        status: "success",
+        reference: bru.getEnvVar("paymentReference"),
+        amount: Number(bru.getEnvVar("paymentAmountKobo")),
+        currency: "NGN",
+        subaccount: { subaccount_code: bru.getEnvVar("subaccountCode") },
+      },
+    };
+    const raw = JSON.stringify(payload);
+    bru.setEnvVar("webhookRawBody", raw);
+    return raw;
+  }
+  req.setBody(chargeSuccessRaw());
+}
+
+assert {
+  res.status: eq 401
+}
+
+tests {
+  test("invalid HMAC is rejected and must not be processed", function () {
+    expect(res.getStatus()).to.equal(401);
+  });
+}

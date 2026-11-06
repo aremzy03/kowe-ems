@@ -1,0 +1,54 @@
+meta {
+  name: 09 Parent My Invoices Unpaid
+  type: http
+  seq: 9
+  tags: [
+    finance
+    smoke
+    phase4
+    parents
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/finance/my-invoices/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 200 && Array.isArray(body.results) && body.results.length) {
+    const inv = body.results[0];
+    bru.setEnvVar("parentInvoiceId", inv.id);
+    bru.setEnvVar("parentInvoiceTotal", String(inv.total_amount));
+    bru.setEnvVar("parentInvoiceStatusBeforePay", inv.status);
+    bru.setEnvVar("parentInvoicePaidBeforePay", String(inv.amount_paid));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("parent sees only linked child invoice, itemized, unpaid", function () {
+    const body = res.getBody();
+    expect(body.count).to.equal(1);
+    const inv = body.results[0];
+    expect(inv.id).to.equal(bru.getEnvVar("parentInvoiceId"));
+    expect(String(inv.student)).to.equal(String(bru.getEnvVar("studentId")));
+    expect(inv.student).to.not.equal(bru.getEnvVar("cashStudentId"));
+    expect(inv.status).to.equal("unpaid");
+    expect(inv.amount_paid).to.equal("0.00");
+    expect(inv.total_amount).to.equal(bru.getEnvVar("parentInvoiceTotal"));
+    expect(inv.line_items).to.be.an("array");
+    expect(inv.line_items.length).to.be.at.least(2);
+  });
+}

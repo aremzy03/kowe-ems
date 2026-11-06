@@ -176,7 +176,7 @@ class StaffInviteAcceptSerializer(serializers.Serializer):
 
 class ParentSignupSerializer(serializers.Serializer):
     """
-    Public parent self-signup for the current tenant (subdomain).
+    Public parent self-signup for the current tenant (``X-Tenant-Slug``).
 
     Creates a shared User when needed and a tenant SchoolMembership with
     role=parent. Does not link any students — that requires linking-code
@@ -194,7 +194,7 @@ class ParentSignupSerializer(serializers.Serializer):
     def validate(self, attrs):
         if connection.schema_name == get_public_schema_name():
             raise serializers.ValidationError(
-                'Parent signup must be performed on a school subdomain.'
+                'Parent signup requires a school tenant (X-Tenant-Slug).'
             )
 
         email = attrs['email']

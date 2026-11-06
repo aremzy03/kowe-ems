@@ -1,0 +1,7 @@
+{% extends "communications/email/base.html" %}
+{% block content %}
+<p style="margin:0 0 12px;">{% if greeting_name %}Hello {{ greeting_name }},{% else %}Hello,{% endif %}</p>
+<p style="margin:0 0 12px;">Results for <strong>{{ student_name }}</strong> for {{ term_label }} are now available.</p>
+<p style="margin:0 0 16px;">Sign in to the parent portal to view the full report.</p>
+<a href="{{ portal_url }}" style="display:inline-block;background:#5B3DE8;color:#FBF6EC;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">View results</a>
+{% endblock %}

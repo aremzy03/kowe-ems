@@ -152,11 +152,15 @@ class Command(BaseCommand):
                 '  admin:       (none — pass --admin-email to seed the first school admin)'
             )
         self.stdout.write('')
-        self.stdout.write('Local hostname options:')
+        self.stdout.write('API is a single host. Identify this school with:')
+        self.stdout.write(f'  Header:  X-Tenant-Slug: {subdomain}')
+        self.stdout.write('  (Domain rows are a lookup table, not the API Host.)')
+        self.stdout.write('')
+        self.stdout.write('Frontend hostname (invite links / SPA):')
         self.stdout.write(f'  /etc/hosts:  127.0.0.1  {domain_name}')
         self.stdout.write(
-            '  nip.io:      http://<subdomain>.127.0.0.1.nip.io:8000  '
-            '(add a Domain row for that host if you use it)'
+            f'  Local UI:    http://{subdomain}.localhost:3000  '
+            '(send X-Tenant-Slug on every school API call)'
         )
         self.stdout.write('')
         self.stdout.write(

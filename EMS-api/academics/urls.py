@@ -5,9 +5,11 @@ from academics.views import (
     ArmViewSet,
     ClassLevelViewSet,
     ClassSubjectAssignmentViewSet,
+    ClassTeacherAssignmentViewSet,
     EnrollmentViewSet,
     LinkingCodeRedeemView,
     MyClassSubjectAssignmentsView,
+    MyClassTeacherAssignmentsView,
     MyStudentsPlaceholderView,
     ParentStudentAccessExampleView,
     SessionViewSet,
@@ -28,6 +30,11 @@ router.register(
     'class-subject-assignments',
     ClassSubjectAssignmentViewSet,
     basename='class-subject-assignment',
+)
+router.register(
+    'class-teacher-assignments',
+    ClassTeacherAssignmentViewSet,
+    basename='class-teacher-assignment',
 )
 
 urlpatterns = [
@@ -50,6 +57,11 @@ urlpatterns = [
         'my-assignments/',
         MyClassSubjectAssignmentsView.as_view(),
         name='my-assignments',
+    ),
+    path(
+        'my-classes/',
+        MyClassTeacherAssignmentsView.as_view(),
+        name='my-classes',
     ),
     path('', include(router.urls)),
 ]

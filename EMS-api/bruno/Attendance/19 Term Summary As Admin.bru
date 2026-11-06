@@ -1,0 +1,37 @@
+meta {
+  name: 19 Term Summary As Admin
+  type: http
+  seq: 19
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/summaries/student/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.available: eq true
+  res.body.days_present: eq 1
+}
+
+tests {
+  test("admin can read any student's termly attendance summary", function () {
+    const body = res.getBody();
+    expect(body.student_id || body.student).to.exist;
+    expect(body.available).to.equal(true);
+    expect(body.days_present).to.equal(1);
+  });
+}

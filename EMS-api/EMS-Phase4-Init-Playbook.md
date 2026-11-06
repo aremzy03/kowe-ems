@@ -6,6 +6,8 @@
 
 ---
 
+
+
 ## Primer — paste this once at the start of the session
 
 ```
@@ -28,6 +30,8 @@ Continue existing conventions. Flag assumptions after each prompt.
 ```
 
 ---
+
+
 
 ## Prompt 1 — School payment account onboarding
 
@@ -60,6 +64,8 @@ Paystack's test environment.
 
 ---
 
+
+
 ## Prompt 2 — Fee structures and invoicing
 
 ```
@@ -88,6 +94,8 @@ at once, confirming no duplicate invoices on a re-run.
 ```
 
 ---
+
+
 
 ## Prompt 3 — Payment initialization (subaccount split)
 
@@ -122,6 +130,8 @@ initialize-transaction request payload being sent to Paystack.
 
 ---
 
+
+
 ## Prompt 4 — Server-side verification endpoint
 
 ```
@@ -149,6 +159,8 @@ the upcoming webhook handler will call it.
 ```
 
 ---
+
+
 
 ## Prompt 5 — Multi-tenant webhook handling
 
@@ -193,6 +205,8 @@ reordered in a way that would process an unverified or misrouted payload.
 
 ---
 
+
+
 ## Prompt 6 — Manual payment recording (bursar)
 
 ```
@@ -211,6 +225,8 @@ method (choices: cash, bank_transfer), recorded_by (FK), notes.
 
 ---
 
+
+
 ## Prompt 7 — Platform revenue tracking and collection dashboard
 
 ```
@@ -223,13 +239,15 @@ method (choices: cash, bank_transfer), recorded_by (FK), notes.
 2. Platform-admin-only endpoint (you, not school staff): revenue overview
    across all tenants — total commission earned, broken down by school and
    time period. This is what makes your platform-wide revenue visible
-   without iterating every tenant schema individually.
+   without iterating every tenant schema individually. 
 3. School-facing (admin/bursar) collection dashboard: outstanding balance
    total, collection rate (paid vs. invoiced) for the current term, broken
    down by class.
 ```
 
 ---
+
+
 
 ## Prompt 8 — Bruno collection updates
 
@@ -253,20 +271,35 @@ cards from the paystack-integration skill:
 
 ---
 
+
+
 ## After completing this phase
 
 Verify before moving to Phase 5 (notifications):
 
 - [ ] No secret key exists anywhere except the single platform-level
-      PAYSTACK_SECRET_KEY environment variable
+  ```
+  PAYSTACK_SECRET_KEY environment variable
+  ```
 - [ ] Account resolution runs before every subaccount creation — no
-      unverified bank details get a subaccount
+  ```
+  unverified bank details get a subaccount
+  ```
 - [ ] A payment is never marked successful based on frontend redirect alone
 - [ ] Webhook signature verification happens before any payload data is
-      trusted or processed
+  ```
+  trusted or processed
+  ```
 - [ ] The same transaction processed via both the verification endpoint AND
-      a webhook retry does not result in double-crediting
+  ```
+  a webhook retry does not result in double-crediting
+  ```
 - [ ] A malformed or unsigned webhook is logged and rejected, not silently
-      dropped or processed
+  ```
+  dropped or processed
+  ```
 - [ ] Platform commission tracking in PlatformTransactionLog matches what
-      Paystack's dashboard shows for the same transactions
+  ```
+  Paystack's dashboard shows for the same transactions
+  ```
+

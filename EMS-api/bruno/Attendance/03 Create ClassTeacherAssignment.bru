@@ -1,0 +1,57 @@
+meta {
+  name: 03 Create ClassTeacherAssignment
+  type: http
+  seq: 3
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/class-teacher-assignments/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "teacher": "{{teacherUserId}}",
+    "class_level": "{{classLevelId}}",
+    "arm": "{{armId}}",
+    "term": "{{termId}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("classTeacherAssignmentId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.teacher: isDefined
+  res.body.class_level: isDefined
+  res.body.arm: isDefined
+  res.body.term: isDefined
+}
+
+tests {
+  test("admin creates ClassTeacherAssignment for form teacher scope", function () {
+    const body = res.getBody();
+    expect(body.teacher).to.equal(bru.getEnvVar("teacherUserId"));
+    expect(body.class_level).to.equal(bru.getEnvVar("classLevelId"));
+    expect(body.arm).to.equal(bru.getEnvVar("armId"));
+    expect(body.term).to.equal(bru.getEnvVar("termId"));
+  });
+}

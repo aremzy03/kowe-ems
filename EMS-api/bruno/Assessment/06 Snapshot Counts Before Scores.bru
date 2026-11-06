@@ -17,7 +17,7 @@ get {
 }
 
 headers {
-  Host: {{tenantHost}}
+  X-Tenant-Slug: {{tenantSlug}}
   Accept: application/json
   Authorization: Bearer {{accessToken}}
 }

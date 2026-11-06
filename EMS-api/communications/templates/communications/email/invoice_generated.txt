@@ -1,0 +1,9 @@
+{% if greeting_name %}Hello {{ greeting_name }},{% else %}Hello,{% endif %}
+
+A new invoice is ready for {{ student_name }} for {{ term_label }} at {{ school_name }}.
+
+Amount due: {{ amount_due }}
+{% if line_items %}{% for item in line_items %}- {{ item.name }}: {{ item.amount }}
+{% endfor %}{% endif %}
+Review the invoice and pay from the parent portal:
+{{ portal_url }}

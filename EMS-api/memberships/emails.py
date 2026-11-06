@@ -6,14 +6,20 @@ from django.core.mail import send_mail
 
 def build_staff_invite_accept_url(request, token: str) -> str:
     """
-    Link on the current tenant host so the invitee lands in the right school.
-
-    Frontend path is configurable; the API only embeds the token query param.
+    Link on the school's *frontend* subdomain so the invitee lands in the
+    right school. The API is a single host; tenant identity in the link is
+    the frontend hostname (the SPA then sends ``X-Tenant-Slug``).
     """
     path = getattr(settings, 'STAFF_INVITE_ACCEPT_PATH', '/accept-invite')
     if not path.startswith('/'):
         path = f'/{path}'
-    base = request.build_absolute_uri('/').rstrip('/')
+    tenant = getattr(request, 'tenant', None)
+    if tenant is not None:
+        from platform_admin.tenancy import frontend_origin_for_tenant
+
+        base = frontend_origin_for_tenant(tenant)
+    else:
+        base = request.build_absolute_uri('/').rstrip('/')
     return f'{base}{path}?token={token}'
 
 

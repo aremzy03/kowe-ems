@@ -1,0 +1,70 @@
+meta {
+  name: 01 Generate Invoices For Class
+  type: http
+  seq: 1
+  tags: [
+    communications
+    smoke
+    phase5
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/finance/invoices/generate/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "class_level": "{{classLevelId}}",
+    "term": "{{termId}}"
+  }
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 201 && Array.isArray(body.invoices)) {
+    bru.setEnvVar("invoiceCreatedCount", String(body.created_count));
+    bru.setEnvVar("invoiceSkippedCount", String(body.skipped_count));
+    const parentId = bru.getEnvVar("studentId");
+    for (const inv of body.invoices) {
+      if (String(inv.student) === String(parentId)) {
+        bru.setEnvVar("parentInvoiceId", inv.id);
+        bru.setEnvVar("parentInvoiceTotal", String(inv.total_amount));
+      }
+    }
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+tests {
+  test("class generate creates an invoice for the linked student", function () {
+    const body = res.getBody();
+    expect(body.created_count).to.be.at.least(1);
+    const parentId = bru.getEnvVar("studentId");
+    const inv = body.invoices.find((row) => String(row.student) === String(parentId));
+    expect(inv).to.be.an("object");
+    expect(inv.id).to.equal(bru.getEnvVar("parentInvoiceId"));
+    expect(inv.status).to.equal("unpaid");
+    expect(Number(inv.total_amount)).to.be.above(0);
+  });
+}
+
+docs {
+  Creates invoices so the invoice_generated signal can queue notifications.
+  Requires a FeeStructure for this class and term (Finance/03) and no
+  invoice yet for {{studentId}}. A second generate skips the student and
+  does not queue another log. Celery eager mode is off: the API inserts
+  queued rows after commit and does not send mail inside this request.
+}

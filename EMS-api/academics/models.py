@@ -52,6 +52,17 @@ class Term(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     is_active = models.BooleanField(default=False, db_index=True)
+    # MVP denominator for attendance % — no academic calendar module yet.
+    # Admin sets instructional-day count manually; national/calendar sync is out of scope.
+    total_school_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            'Admin-set count of instructional days in this term. '
+            'Denominator for attendance percentage. Set manually — there is '
+            'no school calendar / holiday module in MVP.'
+        ),
+    )
 
     class Meta:
         ordering = ['session', 'start_date']
@@ -173,6 +184,56 @@ class ClassSubjectAssignment(models.Model):
     def __str__(self):
         return (
             f'{self.teacher} → {self.subject} / {self.class_level}{self.arm} '
+            f'({self.term})'
+        )
+
+
+class ClassTeacherAssignment(models.Model):
+    """
+    Which teacher is the form/class teacher for a class arm in a term.
+
+    Tenant-scoped. Distinct from ``ClassSubjectAssignment``: attendance is
+    taken once per class/arm/day by the form teacher, who may or may not
+    teach any subject in that class. Source of truth for attendance-marking
+    authority (Phase 3).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    teacher = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='class_teacher_assignments',
+    )
+    class_level = models.ForeignKey(
+        ClassLevel,
+        on_delete=models.PROTECT,
+        related_name='class_teacher_assignments',
+    )
+    arm = models.ForeignKey(
+        Arm,
+        on_delete=models.PROTECT,
+        related_name='class_teacher_assignments',
+    )
+    term = models.ForeignKey(
+        Term,
+        on_delete=models.PROTECT,
+        related_name='class_teacher_assignments',
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['term', 'class_level', 'arm']
+        constraints = [
+            # One form/class teacher per arm+term (no double-booking).
+            models.UniqueConstraint(
+                fields=['class_level', 'arm', 'term'],
+                name='uniq_cta_class_arm_term',
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f'{self.teacher} → form teacher / {self.class_level}{self.arm} '
             f'({self.term})'
         )
 

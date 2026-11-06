@@ -1,0 +1,38 @@
+meta {
+  name: 04 Teacher My Classes
+  type: http
+  seq: 4
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/academics/my-classes/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("teacher sees own ClassTeacherAssignment via my-classes", function () {
+    const body = res.getBody();
+    const rows = Array.isArray(body) ? body : body.results || [];
+    expect(rows.length).to.be.at.least(1);
+    const match = rows.find((r) => r.id === bru.getEnvVar("classTeacherAssignmentId"));
+    expect(match).to.exist;
+    expect(match.class_level).to.equal(bru.getEnvVar("classLevelId"));
+    expect(match.arm).to.equal(bru.getEnvVar("armId"));
+  });
+}

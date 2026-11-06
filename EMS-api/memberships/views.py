@@ -20,8 +20,8 @@ class StaffInviteCreateView(APIView):
     """
     POST /api/memberships/invites/
 
-    School-admin only. Creates a pending StaffInvite and emails the accept link
-    on the current tenant host.
+    School-admin only. Creates a pending StaffInvite and emails the accept
+    link on the school's frontend subdomain.
     """
 
     permission_classes = [IsSchoolAdmin]

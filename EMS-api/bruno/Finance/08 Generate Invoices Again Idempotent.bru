@@ -1,0 +1,45 @@
+meta {
+  name: 08 Generate Invoices Again Idempotent
+  type: http
+  seq: 8
+  tags: [
+    finance
+    smoke
+    phase4
+    idempotency
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/finance/invoices/generate/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "class_level": "{{classLevelId}}",
+    "term": "{{termId}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("re-run skips existing student invoices (no duplicates)", function () {
+    const body = res.getBody();
+    expect(body.created_count).to.equal(0);
+    expect(body.skipped_count).to.be.at.least(2);
+    expect(body.invoices).to.be.an("array");
+    expect(body.invoices.length).to.equal(0);
+  });
+}

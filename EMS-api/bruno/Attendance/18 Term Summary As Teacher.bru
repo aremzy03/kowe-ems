@@ -1,0 +1,39 @@
+meta {
+  name: 18 Term Summary As Teacher
+  type: http
+  seq: 18
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/summaries/student/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.available: eq true
+  res.body.days_present: eq 1
+  res.body.total_school_days: eq 60
+}
+
+tests {
+  test("assigned class teacher can read termly attendance summary", function () {
+    const body = res.getBody();
+    expect(body.available).to.equal(true);
+    expect(body.days_present).to.equal(1);
+    expect(body.total_school_days).to.equal(60);
+    expect(body.attendance_percentage).to.equal("1.67");
+  });
+}

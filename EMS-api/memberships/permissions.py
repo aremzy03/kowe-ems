@@ -3,7 +3,7 @@ Tenant-aware DRF permission classes based on SchoolMembership.role.
 
 Roles live on per-tenant SchoolMembership, not on the shared User. These
 classes resolve the caller's active membership in the *current* tenant schema
-(set by TenantMainMiddleware) and attach it to ``request.membership`` so
+(set by HeaderTenantMiddleware) and attach it to ``request.membership`` so
 viewsets can filter querysets without repeating the lookup.
 
 Admin and bursar also require a confirmed TOTP device (shared/public schema).
@@ -69,7 +69,8 @@ class HasActiveMembership(BasePermission):
     Authenticated user with an active SchoolMembership in the current tenant.
 
     Being logged in is not enough: a valid JWT from another school must not
-    grant access when the Host resolves to a different tenant schema.
+    grant access when the JWT ``tenant_schema`` (or ``X-Tenant-Slug``) resolves
+    to a different tenant schema.
     """
 
     message = 'Active membership at this school is required.'
