@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>EMS — Paper Brutalism Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;700&family=Kalam:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #211F26;
+    --paper: #FBF6EC;
+    --paper-card: #FFFFFB;
+    --accent-1: #5B3DE8;
+    --accent-2: #FF7A45;
+    --success: #1C9C7C;
+    --warning: #F5A623;
+    --danger: #E14B4B;
+
+    --shadow-sm: 2px 2px 0 0 var(--ink);
+    --shadow: 4px 4px 0 0 var(--ink);
+    --shadow-lg: 7px 7px 0 0 var(--ink);
+
+    --font-heading: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-accent: 'Kalam', cursive;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+  }
+  h1, h2, h3 { font-family: var(--font-heading); margin: 0; }
+
+  /* ---------- AUTH SECTION (turned up) ---------- */
+  .auth-section {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem;
+    background-image:
+      radial-gradient(var(--ink) 0.6px, transparent 0.6px);
+    background-size: 18px 18px;
+    background-color: var(--paper);
+    background-blend-mode: normal;
+  }
+  .auth-card {
+    background: var(--paper-card);
+    border: 3.5px solid var(--ink);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 2.5rem 2.25rem;
+    width: 100%;
+    max-width: 380px;
+  }
+  .auth-flourish {
+    font-family: var(--font-accent);
+    font-size: 1.4rem;
+    color: var(--accent-1);
+    margin-bottom: 0.25rem;
+  }
+  .auth-card h1 { font-size: 1.6rem; margin-bottom: 1.5rem; }
+  .field { margin-bottom: 1.1rem; }
+  .field label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 500;
+    margin-bottom: 0.35rem;
+  }
+  .field input {
+    width: 100%;
+    padding: 0.65rem 0.75rem;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    border: 2.5px solid var(--ink);
+    border-radius: 8px;
+    background: var(--paper);
+    color: var(--ink);
+    outline: none;
+  }
+  .field input:focus {
+    outline: 3px solid var(--accent-1);
+    outline-offset: 2px;
+  }
+  .btn-primary {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--paper-card);
+    background: var(--accent-1);
+    border: 2.5px solid var(--ink);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    transition: transform 100ms ease, box-shadow 100ms ease;
+  }
+  .btn-primary:hover { transform: translate(-2px, -2px); box-shadow: var(--shadow-lg); }
+  .btn-primary:active { transform: translate(3px, 3px); box-shadow: none; }
+  .auth-footnote {
+    margin-top: 1.25rem;
+    font-size: 0.82rem;
+    text-align: center;
+    color: #5c5964;
+  }
+
+  /* ---------- DASHBOARD SECTION (turned down) ---------- */
+  .dash-section {
+    padding: 2.5rem 1.5rem 4rem;
+    max-width: 920px;
+    margin: 0 auto;
+  }
+  .dash-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2.5px solid var(--ink);
+    padding-bottom: 1rem;
+    margin-bottom: 2rem;
+  }
+  .dash-nav .logo { font-family: var(--font-heading); font-weight: 700; font-size: 1.1rem; }
+  .dash-nav .tag {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    border: 1.5px solid var(--ink);
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .metric-card {
+    background: var(--paper-card);
+    border: 1.5px solid var(--ink);
+    border-radius: 8px;
+    box-shadow: var(--shadow-sm);
+    padding: 1rem 1.1rem;
+  }
+  .metric-card .label { font-size: 0.75rem; color: #5c5964; margin-bottom: 0.35rem; }
+  .metric-card .value { font-family: var(--font-heading); font-size: 1.4rem; font-weight: 700; }
+
+  .dash-table-wrap {
+    background: var(--paper-card);
+    border: 1.5px solid var(--ink);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th {
+    text-align: left;
+    font-family: var(--font-heading);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.7rem 1rem;
+    border-bottom: 1.5px solid var(--ink);
+  }
+  td { padding: 0.65rem 1rem; border-bottom: 1px solid #ddd6c4; }
+  tr:last-child td { border-bottom: none; }
+  .id-cell { font-family: var(--font-mono); font-size: 0.82rem; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+    border: 1.5px solid var(--ink);
+  }
+  .badge-success { background: #d9f2ea; color: #0e5c47; }
+  .badge-warning { background: #fdecc8; color: #7a5209; }
+  .badge-danger { background: #fadada; color: #7f2222; }
+  .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+  .badge-success::before { background: var(--success); }
+  .badge-warning::before { background: var(--warning); }
+  .badge-danger::before { background: var(--danger); }
+
+  .section-title { margin-bottom: 1rem; font-size: 1.05rem; }
+</style>
+</head>
+<body>
+
+  <section class="auth-section">
+    <div class="auth-card">
+      <div class="auth-flourish">Welcome back</div>
+      <h1>Sign in to your school</h1>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="bursar@greenfield-schools.ng" />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="••••••••••" />
+      </div>
+      <button class="btn-primary">Sign in</button>
+      <div class="auth-footnote">Forgot your password? Contact your school admin.</div>
+    </div>
+  </section>
+
+  <section class="dash-section">
+    <div class="dash-nav">
+      <div class="logo">Greenfield Schools · Bursar</div>
+      <div class="tag">TERM 1 · 2025/26</div>
+    </div>
+
+    <h2 class="section-title">Fee overview</h2>
+    <div class="metric-grid">
+      <div class="metric-card">
+        <div class="label">Total invoiced</div>
+        <div class="value">₦18,420,000</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">Collected</div>
+        <div class="value">₦14,110,500</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">Outstanding</div>
+        <div class="value">₦4,309,500</div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Recent payments</h2>
+    <div class="dash-table-wrap">
+      <table>
+        <thead>
+          <tr><th>Student</th><th>ID</th><th>Amount</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Ada Nwosu — JSS 2B</td>
+            <td class="id-cell">STU-04821</td>
+            <td>₦85,000</td>
+            <td><span class="badge badge-success">Paid</span></td>
+          </tr>
+          <tr>
+            <td>Emeka Obi — SSS 1A</td>
+            <td class="id-cell">STU-03390</td>
+            <td>₦42,500</td>
+            <td><span class="badge badge-warning">Partial</span></td>
+          </tr>
+          <tr>
+            <td>Fatima Bello — Primary 5</td>
+            <td class="id-cell">STU-05107</td>
+            <td>₦60,000</td>
+            <td><span class="badge badge-danger">Overdue</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</body>
+</html>

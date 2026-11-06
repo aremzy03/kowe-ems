@@ -1,0 +1,19 @@
+{
+  "name": "ems-frontends",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@ems/tenant",
+    "dev:tenant": "npm run dev --workspace=@ems/tenant",
+    "dev:platform": "npm run dev --workspace=@ems/platform",
+    "build": "npm run build --workspaces --if-present",
+    "build:tenant": "npm run build --workspace=@ems/tenant",
+    "build:platform": "npm run build --workspace=@ems/platform",
+    "lint": "npm run lint --workspaces --if-present",
+    "start:tenant": "npm run start --workspace=@ems/tenant",
+    "start:platform": "npm run start --workspace=@ems/platform"
+  }
+}
