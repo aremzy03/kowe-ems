@@ -6,10 +6,12 @@ Design (tenant role × shared User login):
   so the school schema is already set before password validation runs.
 - After password succeeds we resolve SchoolMembership in *this* tenant.
 - teacher/parent → issue normal JWT access + refresh immediately.
-- admin/bursar → do **not** issue full tokens; return a short-lived pre_2fa
-  AccessToken. The client must either enroll (first time) or submit a TOTP
-  code, then we mint full tokens. Devices live on the shared User so a person
-  who is admin at school A and bursar at school B enrolls once.
+- admin/bursar → when ``REQUIRE_ADMIN_2FA`` is on, do **not** issue full
+  tokens; return a short-lived pre_2fa AccessToken. The client must either
+  enroll (first time) or submit a TOTP code, then we mint full tokens.
+  When the setting is off (current default), admin/bursar get the same
+  immediate tokens as teacher/parent. Devices live on the shared User so a
+  person who is admin at school A and bursar at school B enrolls once.
 """
 
 from __future__ import annotations
@@ -38,6 +40,8 @@ ROLES_REQUIRING_2FA = frozenset(
 
 
 def role_requires_2fa(role: str | None) -> bool:
+    if not getattr(settings, 'REQUIRE_ADMIN_2FA', False):
+        return False
     return role in ROLES_REQUIRING_2FA
 
 

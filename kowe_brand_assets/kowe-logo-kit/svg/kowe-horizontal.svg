@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 861 256" width="861" height="256" role="img" aria-labelledby="title">
+  <title id="title">Kowe logo</title>
+  <g id="symbol">
+    <path fill="#5B3DE8" fill-rule="evenodd" d="M72 16 H184 A56 56 0 0 1 240 72 V184 A56 56 0 0 1 184 240 H72 A56 56 0 0 1 16 184 V72 A56 56 0 0 1 72 16 Z M62 104 A66 66 0 1 1 194 104 A66 66 0 1 1 62 104 Z M92 104 A36 36 0 1 1 164 104 A36 36 0 1 1 92 104 Z"/>
+    <circle fill="#FF7A45" cx="128" cy="200" r="16"/>
+  </g>
+  <g id="wordmark" transform="translate(296 75)">
+    <path fill="#211F26" d="M0 -64 H26 V40 L66 0 H102 L39 63 L104 128 H68 L26 86 V128 H0 Z"/>
+    <path fill="#211F26" fill-rule="evenodd" d="M116 64 A64 66 0 1 1 244 64 A64 66 0 1 1 116 64 Z M142 64 A38 40 0 1 0 218 64 A38 40 0 1 0 142 64 Z"/>
+    <circle fill="#FF7A45" cx="180" cy="157" r="13"/>
+    <path fill="#211F26" d="M252 0 H279 L299.8 77.62 L320.6 0 H347.6 L368.4 77.62 L389.2 0 H416.2 L381.9 128 H354.9 L334.1 50.38 L313.3 128 H286.3 Z"/>
+    <path fill="#211F26" d="M527.14 114.56 A64 66 0 1 1 549 76 L522.25 76 A38 40 0 1 0 510.43 94.64 Z"/>
+    <path fill="#211F26" d="M438 52 H533 V76 H438 Z"/>
+  </g>
+</svg>

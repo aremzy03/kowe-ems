@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
+  <title id="title">Kowe symbol, reversed</title>
+  <rect id="tile" x="16" y="16" width="224" height="224" rx="56" fill="#FBF6EC"/>
+  <path id="ring" fill="#5B3DE8" fill-rule="evenodd" d="M62 104 A66 66 0 1 1 194 104 A66 66 0 1 1 62 104 Z M92 104 A36 36 0 1 1 164 104 A36 36 0 1 1 92 104 Z"/>
+  <circle id="subdot" fill="#FF7A45" cx="128" cy="200" r="16"/>
+</svg>

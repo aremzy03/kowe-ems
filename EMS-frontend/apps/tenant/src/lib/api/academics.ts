@@ -21,17 +21,18 @@ export type Session = {
   name: string;
   start_date?: string;
   end_date?: string;
-  is_current?: boolean;
+  is_active?: boolean;
 };
 
 export type Term = {
   id: string;
   name: string;
   session: string;
+  session_name?: string;
   start_date?: string;
   end_date?: string;
   total_school_days?: number;
-  is_current?: boolean;
+  is_active?: boolean;
 };
 
 export type ClassLevel = { id: string; name: string; order?: number };
@@ -41,30 +42,52 @@ export type Student = {
   id: string;
   first_name?: string;
   last_name?: string;
+  date_of_birth?: string;
+  gender?: string;
   admission_number?: string;
+  admission_date?: string;
   full_name?: string;
+  linking_code?: string | null;
 };
 export type Enrollment = {
   id: string;
   student: string;
+  student_name?: string;
+  student_admission_number?: string;
   term: string;
+  term_name?: string;
   class_level: string;
+  class_level_name?: string;
   arm: string;
+  arm_name?: string;
+  session?: string;
+  session_name?: string;
+  status?: string;
 };
 export type ClassSubjectAssignment = {
   id: string;
   teacher: string;
+  teacher_email?: string;
   subject: string;
+  subject_name?: string;
+  subject_code?: string;
   class_level: string;
-  arm?: string;
+  class_level_name?: string;
+  arm: string;
+  arm_name?: string;
   term: string;
+  term_name?: string;
 };
 export type ClassTeacherAssignment = {
   id: string;
   teacher: string;
+  teacher_email?: string;
   class_level: string;
+  class_level_name?: string;
   arm: string;
+  arm_name?: string;
   term: string;
+  term_name?: string;
 };
 
 export const academicsApi = {

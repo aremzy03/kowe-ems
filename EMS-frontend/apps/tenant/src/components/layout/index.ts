@@ -4,5 +4,7 @@ export { StaffTopbar } from "./StaffTopbar";
 export { ParentShell } from "./ParentShell";
 export { ChildSwitcher } from "./ChildSwitcher";
 export { AuthShell } from "./AuthShell";
+export { KoweMark } from "./KoweMark";
+export { KoweLockup } from "./KoweLockup";
 export { EmsMark } from "./EmsMark";
 export { StubPage } from "./StubPage";

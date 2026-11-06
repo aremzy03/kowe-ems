@@ -8,11 +8,14 @@ function unwrapList<T>(data: Paginated<T> | T[]): T[] {
 export type AssessmentComponent = {
   id: string;
   name: string;
-  weight: string | number;
+  weight_percentage: string | number;
   max_score?: string | number;
   subject?: string;
+  subject_name?: string;
   class_level?: string;
+  class_level_name?: string;
   term?: string;
+  term_name?: string;
 };
 
 export const assessmentApi = {
@@ -54,6 +57,21 @@ export const assessmentApi = {
       body,
       auth: true,
     }),
+  publish: (body: { class_level: string; arm: string; term: string }) =>
+    apiFetch<{
+      detail: string;
+      class_level: string;
+      arm: string;
+      term: string;
+      published_count: number;
+      newly_published_count: number;
+      students_without_summary: number;
+      published_at: string;
+    }>("/api/assessment/results/publish/", {
+      method: "POST",
+      body,
+      auth: true,
+    }),
   studentResults: (student: string, term: string) =>
     apiFetch(
       `/api/assessment/results/student/?student=${encodeURIComponent(student)}&term=${encodeURIComponent(term)}`,
@@ -88,7 +106,10 @@ export const assessmentApi = {
       {
         credentials: "include",
         headers: {
-          Accept: "application/pdf",
+          // DRF content negotiation only advertises JSON. A strict
+          // application/pdf Accept is rejected with 406 before the PDF
+          // response is built.
+          Accept: "*/*",
           "X-Tenant-Slug": slug,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },

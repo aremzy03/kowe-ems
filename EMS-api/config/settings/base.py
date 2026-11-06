@@ -281,6 +281,9 @@ WHATSAPP_PAIR_INTERVAL_SECONDS = env.int(
 # --- Two-factor auth (TOTP via django-otp) ---
 # Short-lived JWT after password for admin/bursar until TOTP succeeds.
 # Claim ``ems_purpose=pre_2fa``; full access/refresh tokens are not issued yet.
+# Off for now so school admin/bursar get a normal login. Set true to re-enable
+# login challenge + confirmed-TOTP gates on admin/bursar endpoints.
+REQUIRE_ADMIN_2FA = env.bool('REQUIRE_ADMIN_2FA', default=False)
 PRE_2FA_TOKEN_LIFETIME = timedelta(minutes=env.int('PRE_2FA_TOKEN_MINUTES', default=10))
 TOTP_DEVICE_NAME = 'default'
 # Issuer shown in authenticator apps (otpauth label).

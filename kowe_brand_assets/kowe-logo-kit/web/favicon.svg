@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
+  <title id="title">Kowe symbol, small-size cut</title>
+  <path id="tile" fill="#5B3DE8" fill-rule="evenodd" d="M64 8 H192 A56 56 0 0 1 248 64 V192 A56 56 0 0 1 192 248 H64 A56 56 0 0 1 8 192 V64 A56 56 0 0 1 64 8 Z M66 98 A62 62 0 1 1 190 98 A62 62 0 1 1 66 98 Z M96 98 A32 32 0 1 1 160 98 A32 32 0 1 1 96 98 Z"/>
+  <circle id="subdot" fill="#FF7A45" cx="128" cy="198" r="22"/>
+</svg>

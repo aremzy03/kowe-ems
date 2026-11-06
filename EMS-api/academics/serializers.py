@@ -107,18 +107,21 @@ class SessionSerializer(serializers.ModelSerializer):
 
 
 class TermSerializer(serializers.ModelSerializer):
+    session_name = serializers.CharField(source='session.name', read_only=True)
+
     class Meta:
         model = Term
         fields = (
             'id',
             'session',
+            'session_name',
             'name',
             'start_date',
             'end_date',
             'is_active',
             'total_school_days',
         )
-        read_only_fields = ('id',)
+        read_only_fields = ('id', 'session_name')
 
     def validate(self, attrs):
         start = attrs.get('start_date', getattr(self.instance, 'start_date', None))
@@ -240,23 +243,55 @@ class StudentSerializer(serializers.ModelSerializer):
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    student_admission_number = serializers.CharField(
+        source='student.admission_number',
+        read_only=True,
+    )
+    class_level_name = serializers.CharField(
+        source='class_level.name',
+        read_only=True,
+    )
+    arm_name = serializers.CharField(source='arm.name', read_only=True)
+    session_name = serializers.CharField(source='session.name', read_only=True)
+    term_name = serializers.CharField(source='term.name', read_only=True)
+
     class Meta:
         model = Enrollment
         fields = (
             'id',
             'student',
+            'student_name',
+            'student_admission_number',
             'class_level',
+            'class_level_name',
             'arm',
+            'arm_name',
             'session',
+            'session_name',
             'term',
+            'term_name',
             'enrolled_at',
             'status',
         )
-        read_only_fields = ('id', 'enrolled_at')
+        read_only_fields = (
+            'id',
+            'student_name',
+            'student_admission_number',
+            'class_level_name',
+            'arm_name',
+            'session_name',
+            'term_name',
+            'enrolled_at',
+        )
         # DRF auto-maps UniqueConstraint(student, session, term) without honouring
         # the ``status=active`` condition — that would block legitimate re-enrolls
         # after withdraw. Custom validate() + DB partial unique index enforce it.
         validators = []
+
+    def get_student_name(self, obj):
+        student = obj.student
+        return f'{student.first_name} {student.last_name}'.strip()
 
     def validate(self, attrs):
         # Merge with instance on partial update so cross-field checks still work.

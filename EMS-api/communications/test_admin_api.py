@@ -13,6 +13,7 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.db import connection
+from django.test import override_settings
 from django.utils import timezone
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from django_tenants.test.cases import TenantTestCase
@@ -279,6 +280,7 @@ class NotificationAdminVisibilityTests(TenantTestCase):
         bad_resend = self._as(self.admin).post(f'{LIST_URL}{uuid.uuid4()}/resend/')
         self.assertEqual(bad_resend.status_code, status.HTTP_404_NOT_FOUND)
 
+    @override_settings(REQUIRE_ADMIN_2FA=True)
     def test_non_admins_cannot_list_or_resend(self):
         for user in (self.bursar, self.teacher, self.parent, self.admin_no_2fa):
             listed = self._as(user).get(LIST_URL)

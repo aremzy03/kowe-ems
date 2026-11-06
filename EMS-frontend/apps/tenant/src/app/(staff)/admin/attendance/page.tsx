@@ -2,11 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import {
-  Card,
-  CardBody,
-  EmptyState,
-  PageHeader,
-} from "@/components/ui";
+  AttendanceOverview,
+  type AttendanceOverviewData,
+} from "@/components/attendance/AttendanceOverview";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { attendanceApi } from "@/lib/api/attendance";
 import { academicsApi } from "@/lib/api/academics";
 
@@ -18,7 +17,10 @@ export default function AdminAttendancePage() {
   const termId = terms.data?.[0]?.id;
   const overview = useQuery({
     queryKey: ["attendance", "admin-overview", termId],
-    queryFn: () => attendanceApi.adminOverview({ term: termId! }),
+    queryFn: () =>
+      attendanceApi.adminOverview({
+        term: termId!,
+      }) as Promise<AttendanceOverviewData>,
     enabled: Boolean(termId),
   });
 
@@ -29,36 +31,18 @@ export default function AdminAttendancePage() {
         description="School-wide attendance summary for the current term"
       />
 
-      {terms.isLoading || overview.isLoading ? (
-        <p className="text-sm text-ink/70">Loading…</p>
-      ) : null}
-      {overview.error ? (
-        <p className="text-sm text-danger">
-          {overview.error instanceof Error
-            ? overview.error.message
-            : "Failed to load"}
-        </p>
-      ) : null}
-
       {!termId && !terms.isLoading ? (
         <EmptyState
           headline="No terms yet"
           body="Create an academic term before viewing attendance overview."
         />
-      ) : null}
-
-      {overview.data ? (
-        <Card>
-          <CardBody>
-            <pre
-              className="overflow-auto text-xs"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              {JSON.stringify(overview.data, null, 2)}
-            </pre>
-          </CardBody>
-        </Card>
-      ) : null}
+      ) : (
+        <AttendanceOverview
+          data={overview.data}
+          isLoading={terms.isLoading || overview.isLoading}
+          error={overview.error}
+        />
+      )}
     </div>
   );
 }

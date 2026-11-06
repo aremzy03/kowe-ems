@@ -8,19 +8,37 @@ function unwrapList<T>(data: Paginated<T> | T[]): T[] {
 export type FeeStructure = {
   id: string;
   name: string;
-  class_level?: string;
-  term?: string;
+  class_level: string;
+  class_level_name?: string;
+  term: string;
+  term_name?: string;
+  session_name?: string;
+  amount: string;
+};
+
+export type InvoiceLineItem = {
+  id: string;
+  fee_structure?: string;
+  name?: string;
   amount?: string;
-  items?: unknown[];
 };
 
 export type Invoice = {
   id: string;
   student?: string;
-  amount_due?: string;
+  student_name?: string;
+  admission_number?: string;
+  term?: string;
+  term_name?: string;
+  session_name?: string;
+  total_amount?: string;
   amount_paid?: string;
+  outstanding_amount?: string;
+  amount_due?: string;
   status?: string;
   reference?: string;
+  line_items?: InvoiceLineItem[];
+  created_at?: string;
 };
 
 export const financeApi = {
@@ -54,6 +72,17 @@ export const financeApi = {
       body,
       auth: true,
     }),
+  listInvoices: async (params?: { term?: string; class_level?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.term) search.set("term", params.term);
+    if (params?.class_level) search.set("class_level", params.class_level);
+    const qs = search.toString();
+    const data = await apiFetch<Paginated<Invoice> | Invoice[]>(
+      `/api/finance/invoices/${qs ? `?${qs}` : ""}`,
+      { auth: true },
+    );
+    return unwrapList(data);
+  },
   myInvoices: async () => {
     const data = await apiFetch<Paginated<Invoice> | Invoice[]>(
       "/api/finance/my-invoices/",

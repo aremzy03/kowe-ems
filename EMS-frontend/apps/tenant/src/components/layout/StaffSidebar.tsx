@@ -10,7 +10,7 @@ import {
   type StaffNavItem,
 } from "@/lib/mocks/staff-nav";
 import { useAppSession } from "@/lib/auth/use-app-session";
-import { EmsMark } from "./EmsMark";
+import { KoweMark } from "./KoweMark";
 import { StaffNavIcon } from "./StaffNavIcon";
 
 function isNavActive(pathname: string, href: string, items: StaffNavItem[]) {
@@ -61,15 +61,9 @@ export function StaffSidebar({ onNavigate, className }: StaffSidebarProps) {
     >
       <div className="px-5 py-6">
         <div className="flex items-center gap-3">
-          <EmsMark size={32} />
+          <KoweMark size={32} />
           <div className="min-w-0">
-            <p
-              className="text-lg font-bold leading-none tracking-tight"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              EMS
-            </p>
-            <p className="mt-1 truncate text-sm text-ink/60">{schoolName}</p>
+            <p className="truncate text-sm font-medium text-ink/80">{schoolName}</p>
           </div>
         </div>
       </div>

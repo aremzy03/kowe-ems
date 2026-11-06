@@ -170,7 +170,8 @@ No `/me` endpoint for MVP — role comes from login/2FA JSON (and optional clien
 |---|---|---|---|
 | `/login` | POST | `/api/auth/login/` | **platform** — omit `X-Tenant-Slug` |
 | `/` (revenue) | GET | `/api/platform/revenue/` | platform |
-| `/tenants`, `/webhooks` | — | — | **No provision/webhook-mgmt APIs** in EMS-api MVP. UI may show informational empty states only. Do not invent endpoints. |
+| `/tenants` | GET | `/api/platform/tenants/` | platform — school name, schema, slug, primary domain, `is_active`, `created_at`. Read-only |
+| `/webhooks` | GET | `/api/platform/webhooks/` | platform — recent `WebhookLog` rows (newest first). Truncated error and payload preview. No replay |
 
 Paystack webhooks: `POST /api/webhooks/paystack/` on Django only — never in Next.
 
@@ -204,5 +205,5 @@ Paystack webhooks: `POST /api/webhooks/paystack/` on Django only — never in Ne
 
 1. No bursar/admin invoice **list** — only `invoices/generate/` + parent `my-invoices/`.
 2. No staff membership **list** — invite create only.
-3. No platform tenant provision / webhook admin APIs — only `GET /api/platform/revenue/`.
+3. No platform tenant-provision wizard or webhook replay. Read lists: `GET /api/platform/tenants/` and `GET /api/platform/webhooks/`, plus `GET /api/platform/revenue/`.
 4. Local cross-site cookie: refresh/CSRF may fail on `*.localhost` → `localhost:8000` until a same-site local parent domain is used.

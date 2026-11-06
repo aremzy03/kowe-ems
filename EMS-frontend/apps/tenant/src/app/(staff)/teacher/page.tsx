@@ -52,29 +52,42 @@ export default function TeacherHomePage() {
           <p className="text-sm text-ink/70">No subject assignments yet.</p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {(assignments.data ?? []).map((assignment) => (
-              <Card key={assignment.id}>
-                <CardHeader className="flex items-start justify-between gap-2">
-                  <div>
-                    <CardTitle>{assignment.subject}</CardTitle>
-                    <p className="mt-1 text-sm text-ink/70">
-                      Level {assignment.class_level}
-                      {assignment.arm ? ` · Arm ${assignment.arm}` : ""}
-                    </p>
-                  </div>
-                  <Badge variant="info">Assigned</Badge>
-                </CardHeader>
-                <CardBody className="flex items-center justify-between gap-3">
-                  <Link
-                    href="/teacher/marks"
-                    className="text-sm font-semibold text-accent-1 underline-offset-2 hover:underline"
-                    style={{ fontFamily: "var(--font-heading)" }}
-                  >
-                    Enter marks
-                  </Link>
-                </CardBody>
-              </Card>
-            ))}
+            {(assignments.data ?? []).map((assignment) => {
+              const subject =
+                assignment.subject_name ||
+                assignment.subject_code ||
+                "Subject";
+              const classArm = [
+                assignment.class_level_name,
+                assignment.arm_name,
+              ]
+                .filter(Boolean)
+                .join(" ");
+              const term = assignment.term_name;
+              return (
+                <Card key={assignment.id}>
+                  <CardHeader className="flex items-start justify-between gap-2">
+                    <div>
+                      <CardTitle>{subject}</CardTitle>
+                      <p className="mt-1 text-sm text-ink/70">
+                        {[classArm || null, term].filter(Boolean).join(" · ") ||
+                          "Class assignment"}
+                      </p>
+                    </div>
+                    <Badge variant="info">Assigned</Badge>
+                  </CardHeader>
+                  <CardBody className="flex items-center justify-between gap-3">
+                    <Link
+                      href="/teacher/marks"
+                      className="text-sm font-semibold text-accent-1 underline-offset-2 hover:underline"
+                      style={{ fontFamily: "var(--font-heading)" }}
+                    >
+                      Enter marks
+                    </Link>
+                  </CardBody>
+                </Card>
+              );
+            })}
           </div>
         )}
       </section>
@@ -93,30 +106,40 @@ export default function TeacherHomePage() {
           <p className="text-sm text-ink/70">No form classes assigned.</p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            {(classes.data ?? []).map((ft) => (
-              <Card key={ft.id}>
-                <CardHeader>
-                  <CardTitle>
-                    Level {ft.class_level} · Arm {ft.arm}
-                  </CardTitle>
-                  <p className="mt-1 text-sm text-ink/70">Form class</p>
-                </CardHeader>
-                <CardBody className="flex flex-wrap gap-3 text-sm font-semibold">
-                  <Link
-                    href="/teacher/attendance"
-                    className="text-accent-1 underline-offset-2 hover:underline"
-                  >
-                    Register
-                  </Link>
-                  <Link
-                    href="/teacher/remarks"
-                    className="text-accent-1 underline-offset-2 hover:underline"
-                  >
-                    Remarks
-                  </Link>
-                </CardBody>
-              </Card>
-            ))}
+            {(classes.data ?? []).map((ft) => {
+              const classArm = [
+                ft.class_level_name,
+                ft.arm_name,
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <Card key={ft.id}>
+                  <CardHeader>
+                    <CardTitle>{classArm || "Form class"}</CardTitle>
+                    <p className="mt-1 text-sm text-ink/70">
+                      {ft.term_name
+                        ? `Form teacher · ${ft.term_name}`
+                        : "Form class"}
+                    </p>
+                  </CardHeader>
+                  <CardBody className="flex flex-wrap gap-3 text-sm font-semibold">
+                    <Link
+                      href="/teacher/attendance"
+                      className="text-accent-1 underline-offset-2 hover:underline"
+                    >
+                      Register
+                    </Link>
+                    <Link
+                      href="/teacher/remarks"
+                      className="text-accent-1 underline-offset-2 hover:underline"
+                    >
+                      Remarks
+                    </Link>
+                  </CardBody>
+                </Card>
+              );
+            })}
           </div>
         )}
       </section>

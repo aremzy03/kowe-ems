@@ -8,6 +8,7 @@ SchoolMembership). School staff JWTs are 403 here.
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -18,12 +19,15 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from memberships.models import SchoolMembership
-from platform_admin.models import PlatformTransactionLog, Tenant
+from platform_admin.models import Domain, PlatformTransactionLog, Tenant, WebhookLog
 from platform_admin.testing import set_tenant_slug
+from platform_admin.views import ERROR_MESSAGE_LIMIT, PAYLOAD_PREVIEW_LIMIT
 
 User = get_user_model()
 
 REVENUE_URL = '/api/platform/revenue/'
+TENANTS_URL = '/api/platform/tenants/'
+WEBHOOKS_URL = '/api/platform/webhooks/'
 LOGIN_URL = '/api/auth/login/'
 
 
@@ -210,3 +214,175 @@ class PlatformRevenueOverviewTests(TenantTestCase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PlatformDirectoryListTests(TenantTestCase):
+    """GET /api/platform/tenants/ and /api/platform/webhooks/ (public schema)."""
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.school_name = 'Test School'
+        return tenant
+
+    def setUp(self):
+        super().setUp()
+        connection.set_tenant(self.tenant)
+        self.operator = User.objects.create_user(
+            email='operator-lists@platform.example',
+            password='pass12345',
+            is_platform_admin=True,
+        )
+        self.school_admin = User.objects.create_user(
+            email='admin-lists@example.com',
+            password='pass12345',
+        )
+        SchoolMembership.objects.create(
+            user=self.school_admin,
+            role=SchoolMembership.Role.ADMIN,
+            is_active=True,
+        )
+        self.public = APIClient()
+        self.tenant_api = APIClient()
+        set_tenant_slug(self.tenant_api, self.tenant)
+
+        with schema_context(get_public_schema_name()):
+            self.inactive = Tenant(
+                schema_name='inactive_list_school',
+                school_name='Inactive School',
+                is_active=False,
+            )
+            self.inactive.auto_create_schema = False
+            self.inactive.save()
+            Domain.objects.create(
+                domain='extra.example.com',
+                tenant=self.tenant,
+                is_primary=False,
+            )
+        connection.set_tenant(self.tenant)
+
+    def test_platform_admin_lists_tenants_school_user_cannot(self):
+        self.public.force_authenticate(user=self.operator)
+        response = self.public.get(TENANTS_URL)
+        connection.set_tenant(self.tenant)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+        by_schema = {row['schema_name']: row for row in response.data['results']}
+        self.assertNotIn(get_public_schema_name(), by_schema)
+        self.assertEqual(response.data['count'], len(response.data['results']))
+        self.assertIn('test', by_schema)
+        self.assertIn('inactive_list_school', by_schema)
+
+        active = by_schema['test']
+        self.assertEqual(active['school_name'], 'Test School')
+        self.assertEqual(active['primary_domain'], 'tenant.test.com')
+        self.assertEqual(active['slug'], 'tenant')
+        self.assertTrue(active['is_active'])
+        self.assertIn('created_at', active)
+
+        inactive = by_schema['inactive_list_school']
+        self.assertEqual(inactive['school_name'], 'Inactive School')
+        self.assertIsNone(inactive['primary_domain'])
+        self.assertEqual(inactive['slug'], 'inactive-list-school')
+        self.assertFalse(inactive['is_active'])
+
+        self.public.force_authenticate(user=self.school_admin)
+        denied = self.public.get(TENANTS_URL)
+        connection.set_tenant(self.tenant)
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.tenant_api.force_authenticate(user=self.operator)
+        on_school = self.tenant_api.get(TENANTS_URL)
+        self.assertEqual(on_school.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_platform_admin_lists_webhooks_school_user_cannot(self):
+        long_error = 'e' * (ERROR_MESSAGE_LIMIT + 40)
+        long_payload = 'p' * (PAYLOAD_PREVIEW_LIMIT + 80)
+        older = WebhookLog.record(
+            signature_valid=False,
+            outcome=WebhookLog.Outcome.UNKNOWN_SUBACCOUNT,
+            event='charge.success',
+            reference='ref_old',
+            subaccount_code='ACCT_missing',
+            error_message=long_error,
+            payload=long_payload,
+        )
+        newer = WebhookLog.record(
+            signature_valid=True,
+            outcome=WebhookLog.Outcome.APPLIED,
+            event='charge.success',
+            reference='ref_new',
+            subaccount_code='ACCT_ok',
+            tenant_id=self.tenant.pk,
+            error_message='',
+            payload='{"event":"charge.success"}',
+        )
+        with schema_context(get_public_schema_name()):
+            WebhookLog.objects.filter(pk=older.pk).update(
+                received_at=timezone.now() - timedelta(hours=2)
+            )
+        connection.set_tenant(self.tenant)
+
+        self.public.force_authenticate(user=self.operator)
+        response = self.public.get(WEBHOOKS_URL)
+        connection.set_tenant(self.tenant)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data['count'], 2)
+        self.assertEqual(
+            [row['reference'] for row in response.data['results']],
+            ['ref_new', 'ref_old'],
+        )
+
+        applied = response.data['results'][0]
+        self.assertEqual(applied['id'], str(newer.pk))
+        self.assertEqual(applied['outcome'], 'applied')
+        self.assertEqual(applied['event'], 'charge.success')
+        self.assertEqual(applied['subaccount_code'], 'ACCT_ok')
+        self.assertEqual(applied['school_name'], 'Test School')
+        self.assertTrue(applied['signature_valid'])
+        self.assertEqual(applied['error_message'], '')
+        self.assertIn('received_at', applied)
+        self.assertNotIn('payload', applied)
+
+        failed = response.data['results'][1]
+        self.assertIsNone(failed['school_name'])
+        self.assertFalse(failed['signature_valid'])
+        self.assertEqual(failed['outcome'], 'unknown_subaccount')
+        self.assertEqual(len(failed['error_message']), ERROR_MESSAGE_LIMIT)
+        self.assertTrue(long_error.startswith(failed['error_message']))
+        self.assertEqual(len(failed['payload_preview']), PAYLOAD_PREVIEW_LIMIT)
+        self.assertTrue(long_payload.startswith(failed['payload_preview']))
+        self.assertNotIn('payload', failed)
+
+        self.public.force_authenticate(user=self.school_admin)
+        denied = self.public.get(WEBHOOKS_URL)
+        connection.set_tenant(self.tenant)
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_webhook_list_returns_newest_within_cap(self):
+        first = WebhookLog.record(
+            signature_valid=True,
+            outcome=WebhookLog.Outcome.IGNORED_EVENT,
+            event='transfer.success',
+            reference='ref_first',
+            payload='{}',
+        )
+        second = WebhookLog.record(
+            signature_valid=True,
+            outcome=WebhookLog.Outcome.IGNORED_EVENT,
+            event='transfer.success',
+            reference='ref_second',
+            payload='{}',
+        )
+        with schema_context(get_public_schema_name()):
+            WebhookLog.objects.filter(pk=first.pk).update(
+                received_at=timezone.now() - timedelta(minutes=5)
+            )
+        connection.set_tenant(self.tenant)
+
+        self.public.force_authenticate(user=self.operator)
+        with patch('platform_admin.views.WEBHOOK_LIST_LIMIT', 1):
+            response = self.public.get(WEBHOOKS_URL)
+        connection.set_tenant(self.tenant)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['id'], str(second.pk))

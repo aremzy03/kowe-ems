@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import ProtectedError
+from django.db.models import Exists, OuterRef, ProtectedError
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -105,7 +105,7 @@ class SchoolPaymentAccountView(APIView):
 
 
 class FeeStructureViewSet(viewsets.ModelViewSet):
-    """Full CRUD for fee items — school admin only."""
+    """Full CRUD for fee items — school admin or bursar."""
 
     queryset = FeeStructure.objects.select_related(
         'class_level',
@@ -113,7 +113,7 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
         'term__session',
     ).all()
     serializer_class = FeeStructureSerializer
-    permission_classes = [IsSchoolAdmin]
+    permission_classes = [IsAdminOrBursar]
 
     def destroy(self, request, *args, **kwargs):
         # PROTECT on InvoiceLineItem.fee_structure: a fee referenced by an
@@ -176,6 +176,63 @@ class InvoiceGenerateView(APIView):
             if result['created']
             else status.HTTP_200_OK,
         )
+
+
+class StaffInvoiceListView(APIView):
+    """
+    GET /api/finance/invoices/ — admin or bursar.
+
+    Every invoice in the current tenant schema (the connection is already
+    on that schema; this view does not route by Host). Optional
+    ``?term=<uuid>`` and ``?class_level=<uuid>`` narrow the list. Invoice
+    has no class of its own, so class matches the student's enrollment for
+    the invoice's term.
+    """
+
+    permission_classes = [IsAdminOrBursar]
+
+    def get(self, request):
+        from academics.models import ClassLevel, Term
+
+        qs = (
+            Invoice.objects.select_related('student', 'term', 'term__session')
+            .prefetch_related('line_items__fee_structure')
+            .annotate(amount_paid_total=paid_amount_annotation())
+        )
+
+        term_id = (request.query_params.get('term') or '').strip()
+        if term_id:
+            try:
+                term = Term.objects.get(pk=term_id)
+            except (Term.DoesNotExist, ValueError, DjangoValidationError):
+                return Response(
+                    {'detail': 'Term not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            qs = qs.filter(term=term)
+
+        class_level_id = (request.query_params.get('class_level') or '').strip()
+        if class_level_id:
+            from academics.models import Enrollment
+
+            try:
+                class_level = ClassLevel.objects.get(pk=class_level_id)
+            except (ClassLevel.DoesNotExist, ValueError, DjangoValidationError):
+                return Response(
+                    {'detail': 'Class level not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            # Exists, not a join: a join would multiply amount_paid_total
+            # when a student has more than one matching enrollment row.
+            enrolled_here = Enrollment.objects.filter(
+                class_level=class_level,
+                student_id=OuterRef('student_id'),
+                term_id=OuterRef('term_id'),
+            )
+            qs = qs.filter(Exists(enrolled_here))
+
+        data = InvoiceSerializer(qs.order_by('-created_at'), many=True).data
+        return Response({'count': len(data), 'results': data})
 
 
 class MyInvoicesView(APIView):

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { KoweLockup } from "@/components/layout/KoweLockup";
 import { PLATFORM_ORIGIN } from "@/lib/api/config";
 
 const portals = [
@@ -33,12 +34,9 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-paper px-6 py-12 text-ink md:px-10">
       <div className="mx-auto max-w-5xl">
-        <h1
-          className="mb-3 text-4xl font-bold tracking-tight md:text-5xl"
-          style={{ fontFamily: "var(--font-heading)" }}
-        >
-          EMS
-        </h1>
+        <div className="mb-4">
+          <KoweLockup width={240} className="mx-0" />
+        </div>
         <p className="mb-10 max-w-2xl text-base leading-relaxed text-ink/75">
           School portals on this subdomain. Platform operators use a separate
           app host.

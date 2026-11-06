@@ -6,9 +6,10 @@ classes resolve the caller's active membership in the *current* tenant schema
 (set by HeaderTenantMiddleware) and attach it to ``request.membership`` so
 viewsets can filter querysets without repeating the lookup.
 
-Admin and bursar also require a confirmed TOTP device (shared/public schema).
-Login-time 2FA is not enough on its own — these gates block role endpoints if
-enrollment was skipped or a pre_2fa token is still in use.
+When ``REQUIRE_ADMIN_2FA`` is on, admin and bursar also require a confirmed
+TOTP device (shared/public schema). Login-time 2FA is not enough on its own —
+these gates block role endpoints if enrollment was skipped or a pre_2fa token
+is still in use. When the setting is off, role checks alone apply.
 """
 
 from django.db import connection
@@ -136,6 +137,18 @@ class IsAdminOrBursar(_HasMembershipRole):
     message = 'School admin or bursar role required.'
 
 
+class IsSchoolMember(_HasMembershipRole):
+    """Any active school role. Used for read-only catalogs parents must see."""
+
+    allowed_roles = (
+        SchoolMembership.Role.ADMIN,
+        SchoolMembership.Role.TEACHER,
+        SchoolMembership.Role.BURSAR,
+        SchoolMembership.Role.PARENT,
+    )
+    message = 'Active membership at this school is required.'
+
+
 class IsAdminOrTeacher(_HasMembershipRole):
     """
     Composable gate for endpoints shared by admin and teacher
@@ -147,3 +160,17 @@ class IsAdminOrTeacher(_HasMembershipRole):
         SchoolMembership.Role.TEACHER,
     )
     message = 'School admin or teacher role required.'
+
+
+class IsAdminOrTeacherOrBursar(_HasMembershipRole):
+    """
+    Catalog reads for class levels / arms / subjects — admin, teacher, and
+    bursar (invoice generation needs class/arm pickers).
+    """
+
+    allowed_roles = (
+        SchoolMembership.Role.ADMIN,
+        SchoolMembership.Role.TEACHER,
+        SchoolMembership.Role.BURSAR,
+    )
+    message = 'School admin, teacher, or bursar role required.'

@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { useAppSession } from "@/lib/auth/use-app-session";
 import { ChildSwitcher } from "./ChildSwitcher";
-import { EmsMark } from "./EmsMark";
+import { KoweMark } from "./KoweMark";
 
 const PARENT_TABS = [
   { href: "/parent", label: "Home", match: (p: string) => p === "/parent" },
@@ -53,15 +53,9 @@ export function ParentShell({ children }: ParentShellProps) {
     <div className="flex min-h-screen flex-col bg-paper text-ink">
       <header className="border-b border-ink/15 bg-paper">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 md:px-6">
-          <EmsMark size={28} />
+          <KoweMark size={28} />
           <div className="min-w-0 flex-1">
-            <p
-              className="text-lg font-bold leading-none"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              EMS
-            </p>
-            <p className="mt-0.5 truncate text-sm text-ink/60">{schoolName}</p>
+            <p className="truncate text-sm font-medium text-ink/80">{schoolName}</p>
           </div>
           <Link
             href="/parent/more"

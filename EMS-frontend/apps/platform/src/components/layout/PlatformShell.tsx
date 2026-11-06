@@ -7,7 +7,7 @@ import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { logout } from "@/lib/api/auth";
 import { useAuth } from "@/lib/auth/auth-provider";
-import { EmsMark } from "./EmsMark";
+import { KoweMark } from "./KoweMark";
 
 const PLATFORM_NAV = [
   { href: "/", label: "Revenue", match: (p: string) => p === "/" },
@@ -51,15 +51,9 @@ export function PlatformShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-paper text-ink">
       <header className="border-b border-ink/15 bg-paper">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 md:px-8">
-          <EmsMark size={28} />
+          <KoweMark size={28} />
           <div className="min-w-0 flex-1">
-            <p
-              className="text-base font-bold leading-none"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              EMS Platform
-            </p>
-            <p className="mt-0.5 truncate text-xs text-ink/65">Platform admin</p>
+            <p className="truncate text-sm font-medium text-ink/80">Platform</p>
           </div>
           <nav className="flex flex-wrap gap-1" aria-label="Platform">
             {PLATFORM_NAV.map((item) => {

@@ -57,21 +57,15 @@ export default function PlatformLoginPage() {
 
   return (
     <AuthShell>
-      <div className="mb-8 text-center">
-        <p
-          className="mb-1 text-lg text-accent-1"
-          style={{ fontFamily: "var(--font-accent)" }}
-        >
-          Platform
-        </p>
+      <div className="mb-6 text-center">
         <h1
-          className="text-4xl font-bold tracking-tight"
+          className="text-xl font-bold tracking-tight"
           style={{ fontFamily: "var(--font-heading)" }}
         >
-          EMS
+          Platform sign-in
         </h1>
         <p className="mt-2 text-ink/75">
-          Operator sign-in. No school tenant header is sent.
+          Operator access. No school tenant header is sent.
         </p>
       </div>
       <div className="rounded-[var(--radius-nb-lg)] border-[3.5px] border-ink bg-paper-card p-6 shadow-nb-lg">

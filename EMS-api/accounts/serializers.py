@@ -37,12 +37,12 @@ class UserSerializer(serializers.ModelSerializer):
 
 class EMSTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
-    Password login with tenant-aware 2FA gating.
+    Password login with optional tenant-aware 2FA gating.
 
     Resolves SchoolMembership in the current tenant schema (from JWT claim or
-    ``X-Tenant-Slug``). Admin and bursar receive a pre_2fa token instead of
-    full JWTs until TOTP succeeds. Teacher and parent receive tokens
-    immediately after password.
+    ``X-Tenant-Slug``). When ``REQUIRE_ADMIN_2FA`` is on, admin and bursar
+    receive a pre_2fa token instead of full JWTs until TOTP succeeds.
+    Otherwise every school role receives tokens immediately after password.
     """
 
     @classmethod

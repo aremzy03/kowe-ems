@@ -90,21 +90,15 @@ function LoginForm() {
 
   return (
     <AuthShell>
-      <div className="mb-8 text-center">
-        <p
-          className="mb-1 text-lg text-accent-1"
-          style={{ fontFamily: "var(--font-accent)" }}
-        >
-          School sign-in
-        </p>
+      <div className="mb-6 text-center">
         <h1
-          className="text-4xl font-bold tracking-tight"
+          className="text-xl font-bold tracking-tight"
           style={{ fontFamily: "var(--font-heading)" }}
         >
-          EMS
+          School sign-in
         </h1>
         <p className="mt-2 text-ink/75">
-          Sign in on your school subdomain. Admins and bursars complete 2FA next.
+          Sign in on your school subdomain with your school email and password.
         </p>
       </div>
 

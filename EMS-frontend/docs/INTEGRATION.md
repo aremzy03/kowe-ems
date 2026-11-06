@@ -34,7 +34,7 @@ Django local already: CORS allows `x-tenant-slug`; `CSRF_TRUSTED_ORIGINS` includ
 
 1. No bursar/admin invoice list — only generate + parent `my-invoices/`
 2. No staff membership list — invite create only
-3. No platform tenant provision / webhook admin APIs — only `GET /api/platform/revenue/`
+3. No platform tenant-provision wizard or webhook replay. Read lists: `GET /api/platform/tenants/` and `GET /api/platform/webhooks/`, plus `GET /api/platform/revenue/`
 4. Paystack webhooks: Django `POST /api/webhooks/paystack/` only
 
 ## Smoke checklist (Bruno-aligned)

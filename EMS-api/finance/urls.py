@@ -9,6 +9,7 @@ from finance.views import (
     MyInvoicesView,
     RecordManualPaymentView,
     SchoolPaymentAccountView,
+    StaffInvoiceListView,
     VerifyPaymentView,
 )
 
@@ -25,6 +26,11 @@ urlpatterns = [
         'invoices/generate/',
         InvoiceGenerateView.as_view(),
         name='finance-invoice-generate',
+    ),
+    path(
+        'invoices/',
+        StaffInvoiceListView.as_view(),
+        name='finance-invoice-list',
     ),
     path(
         'my-invoices/',

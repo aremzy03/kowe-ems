@@ -25,8 +25,20 @@ const kalam = Kalam({
 });
 
 export const metadata: Metadata = {
-  title: "EMS Platform",
-  description: "EMS platform administration",
+  title: "Kowe Platform",
+  description: "Kowe platform administration",
+  applicationName: "Kowe Platform",
+  themeColor: "#5B3DE8",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png" }],
+  },
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({

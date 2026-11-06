@@ -13,8 +13,10 @@ export const STAFF_NAV: Record<"admin" | "teacher" | "bursar", StaffNavItem[]> =
     { href: "/admin/enrollment", label: "Enrollment" },
     { href: "/admin/staff", label: "Staff" },
     { href: "/admin/assignments", label: "Assignments" },
+    { href: "/admin/results", label: "Publish results" },
     { href: "/admin/attendance", label: "Attendance" },
     { href: "/admin/fees", label: "Fees" },
+    { href: "/admin/fee-structures", label: "Fee structures" },
   ],
   teacher: [
     { href: "/teacher", label: "Home" },
@@ -52,5 +54,5 @@ export function titleForPath(
   const nested = items
     .filter((item) => item.href !== pathname && pathname.startsWith(`${item.href}/`))
     .sort((a, b) => b.href.length - a.href.length)[0];
-  return nested?.label ?? items[0]?.label ?? "EMS";
+  return nested?.label ?? items[0]?.label ?? "Kowe";
 }

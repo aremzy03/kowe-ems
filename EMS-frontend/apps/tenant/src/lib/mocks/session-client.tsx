@@ -70,9 +70,10 @@ export function clearPending2faRole() {
   sessionStorage.removeItem(PENDING_2FA_KEY);
 }
 
-/** Roles that must complete 2FA before a full mock session is set */
-export function roleRequires2fa(role: MockRole): boolean {
-  return role === "admin" || role === "bursar";
+/** Roles that must complete 2FA before a full mock session is set.
+ * Off for now to match API ``REQUIRE_ADMIN_2FA=False``. */
+export function roleRequires2fa(_role: MockRole): boolean {
+  return false;
 }
 
 export function loginAsRole(role: MockRole) {
@@ -81,7 +82,7 @@ export function loginAsRole(role: MockRole) {
 }
 
 /**
- * Start a mock login. Admin/bursar go through /2fa/verify before session cookie.
+ * Start a mock login. 2FA challenge is off while roleRequires2fa is false.
  */
 export function beginMockLogin(role: MockRole) {
   if (roleRequires2fa(role)) {

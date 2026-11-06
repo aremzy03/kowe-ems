@@ -25,8 +25,20 @@ const kalam = Kalam({
 });
 
 export const metadata: Metadata = {
-  title: "EMS",
-  description: "Education Management System",
+  title: "Kowe",
+  description: "School management for Nigerian K–12",
+  applicationName: "Kowe",
+  themeColor: "#5B3DE8",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png" }],
+  },
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({

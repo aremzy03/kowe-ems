@@ -76,4 +76,18 @@
     outline: 3px solid var(--color-accent-1);
     outline-offset: 3px;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nb-interactive {
+      transition: none;
+    }
+    .nb-interactive:hover,
+    .nb-interactive:active {
+      transform: none;
+    }
+    /* Press still drops the offset shadow so the control feels engaged */
+    .nb-interactive:active {
+      box-shadow: none !important;
+    }
+  }
 }

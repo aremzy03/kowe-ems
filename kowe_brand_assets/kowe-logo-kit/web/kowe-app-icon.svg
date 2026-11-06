@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><title>Kowe</title><rect width="256" height="256" rx="57.6" fill="#5B3DE8"/><g transform="translate(-19.33 -18.18) scale(1.151)">
+  <title id="title">Kowe glyph: ring and subdot, no tile</title>
+  <path id="ring" fill="#FBF6EC" fill-rule="evenodd" d="M62 104 A66 66 0 1 1 194 104 A66 66 0 1 1 62 104 Z M92 104 A36 36 0 1 1 164 104 A36 36 0 1 1 92 104 Z"/>
+  <circle id="subdot" fill="#FF7A45" cx="128" cy="200" r="16"/>
+</g></svg>

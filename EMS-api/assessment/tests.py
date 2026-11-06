@@ -13,6 +13,7 @@ from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from django.utils import timezone
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from django_tenants.test.cases import TenantTestCase
@@ -346,6 +347,7 @@ class ResultPublicationGateTests(TenantTestCase):
         )
         self.assertEqual(sheet.status_code, status.HTTP_403_FORBIDDEN)
 
+    @override_settings(REQUIRE_ADMIN_2FA=True)
     def test_only_admin_with_2fa_can_publish(self):
         for user in (self.teacher, self.parent, self.bursar, self.admin_no_2fa):
             response = self._publish(user)

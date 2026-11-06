@@ -34,7 +34,14 @@ from academics.serializers import (
     TermSerializer,
 )
 from academics.teacher_assignments import assignments_for_teacher
-from memberships.permissions import IsAdminOrTeacher, IsParent, IsSchoolAdmin, IsTeacher
+from memberships.permissions import (
+    IsAdminOrTeacher,
+    IsAdminOrTeacherOrBursar,
+    IsParent,
+    IsSchoolAdmin,
+    IsSchoolMember,
+    IsTeacher,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -43,24 +50,38 @@ from memberships.permissions import IsAdminOrTeacher, IsParent, IsSchoolAdmin, I
 
 
 class SessionViewSet(viewsets.ModelViewSet):
-    """Full CRUD for academic sessions — school admin only."""
+    """
+    Sessions: any school member may list/retrieve (term pickers need labels).
+    Writes stay admin-only.
+    """
 
     queryset = Session.objects.all()
     serializer_class = SessionSerializer
-    permission_classes = [IsSchoolAdmin]
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsSchoolMember()]
+        return [IsSchoolAdmin()]
 
 
 class TermViewSet(viewsets.ModelViewSet):
-    """Full CRUD for terms — school admin only."""
+    """
+    Terms: any school member may list/retrieve (parent results and attendance
+    need the term id). Writes stay admin-only.
+    """
 
     queryset = Term.objects.select_related('session').all()
     serializer_class = TermSerializer
-    permission_classes = [IsSchoolAdmin]
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsSchoolMember()]
+        return [IsSchoolAdmin()]
 
 
 class ClassLevelViewSet(viewsets.ModelViewSet):
     """
-    Class levels: teachers may list/retrieve (for marks entry);
+    Class levels: teachers and bursars may list/retrieve (marks / invoicing);
     writes are admin-only.
     """
 
@@ -69,13 +90,13 @@ class ClassLevelViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
-            return [IsAdminOrTeacher()]
+            return [IsAdminOrTeacherOrBursar()]
         return [IsSchoolAdmin()]
 
 
 class ArmViewSet(viewsets.ModelViewSet):
     """
-    Arms: teachers may list/retrieve; writes are admin-only.
+    Arms: teachers and bursars may list/retrieve; writes are admin-only.
     """
 
     queryset = Arm.objects.select_related('class_level').all()
@@ -83,13 +104,13 @@ class ArmViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
-            return [IsAdminOrTeacher()]
+            return [IsAdminOrTeacherOrBursar()]
         return [IsSchoolAdmin()]
 
 
 class SubjectViewSet(viewsets.ModelViewSet):
     """
-    Subjects: teachers may list/retrieve; writes are admin-only.
+    Subjects: teachers and bursars may list/retrieve; writes are admin-only.
     """
 
     queryset = Subject.objects.all()
@@ -97,7 +118,7 @@ class SubjectViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
-            return [IsAdminOrTeacher()]
+            return [IsAdminOrTeacherOrBursar()]
         return [IsSchoolAdmin()]
 
 

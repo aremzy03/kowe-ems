@@ -28,6 +28,8 @@ Money-safety invariants proven here:
   * bursar/admin manual cash/transfer creates SUCCESS gateway=manual and
     updates invoice status via recompute_invoice_payment_status (not
     verify_and_apply_payment)
+  * staff invoice list is admin/bursar only, stays in the current tenant
+    schema, and can filter by term and class level
   * PlatformTransactionLog is written only inside verify_and_apply_payment
     after Paystack SUCCESS (webhook and return-flow share that write);
     manual recordings never write it
@@ -301,6 +303,7 @@ class SchoolPaymentAccountOnboardingTests(TenantTestCase):
 
 FEES_URL = '/api/finance/fee-structures/'
 GENERATE_URL = '/api/finance/invoices/generate/'
+INVOICES_URL = '/api/finance/invoices/'
 MY_INVOICES_URL = '/api/finance/my-invoices/'
 
 
@@ -460,8 +463,25 @@ class FeeStructureCrudTests(FinanceInvoicingTestCase):
         deleted = self.api.delete(f'{FEES_URL}{fee_id}/')
         self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT)
 
-    def test_non_admin_roles_cannot_touch_fee_structures(self):
-        for user in (self.bursar, self.teacher, self.parent):
+    def test_bursar_can_create_and_list_fee_structures(self):
+        self.api.force_authenticate(user=self.bursar)
+        create = self.api.post(
+            FEES_URL,
+            {
+                'class_level': str(self.class_level.id),
+                'term': str(self.term.id),
+                'name': 'Bursar Levy',
+                'amount': '5000.00',
+            },
+            format='json',
+        )
+        self.assertEqual(create.status_code, status.HTTP_201_CREATED, create.data)
+        listed = self.api.get(FEES_URL)
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(listed.data), 1)
+
+    def test_teacher_and_parent_cannot_touch_fee_structures(self):
+        for user in (self.teacher, self.parent):
             self.api.force_authenticate(user=user)
             response = self.api.post(
                 FEES_URL,
@@ -661,6 +681,153 @@ class ParentInvoiceAccessTests(FinanceInvoicingTestCase):
             self.assertEqual(
                 response.status_code, status.HTTP_403_FORBIDDEN, user.email
             )
+
+
+class StaffInvoiceListTests(FinanceInvoicingTestCase):
+    """GET /api/finance/invoices/ — staff list for the current tenant schema."""
+
+    def setUp(self):
+        super().setUp()
+        from datetime import date
+
+        from academics.models import Arm, Enrollment, Student, Term
+        from finance.models import FeeStructure, Invoice
+        from finance.services import generate_invoices_for_class_term
+
+        self._make_fees()
+        self._generate(self.admin)
+
+        self.second_term = Term.objects.create(
+            session=self.session,
+            name=Term.Name.SECOND,
+            start_date=date(2027, 1, 11),
+            end_date=date(2027, 4, 10),
+            is_active=False,
+        )
+        self.second_term_invoice = Invoice.objects.create(
+            student=self.students[0],
+            term=self.second_term,
+            total_amount=Decimal('1000.00'),
+            status=Invoice.Status.UNPAID,
+        )
+
+        self.jss2_student = Student.objects.create(
+            first_name='Jss2',
+            last_name='Kid',
+            date_of_birth=date(2013, 1, 1),
+            gender=Student.Gender.FEMALE,
+            admission_number='ADM-JSS2',
+            admission_date=date(2026, 9, 1),
+        )
+        jss2_arm = Arm.objects.create(class_level=self.other_class_level, name='A')
+        Enrollment.objects.create(
+            student=self.jss2_student,
+            class_level=self.other_class_level,
+            arm=jss2_arm,
+            session=self.session,
+            term=self.term,
+            status=Enrollment.Status.ACTIVE,
+        )
+        FeeStructure.objects.create(
+            class_level=self.other_class_level,
+            term=self.term,
+            name='Tuition',
+            amount=Decimal('100000.00'),
+        )
+        generate_invoices_for_class_term(
+            class_level=self.other_class_level, term=self.term
+        )
+
+    def _list(self, user, **params):
+        self.api.force_authenticate(user=user)
+        return self.api.get(INVOICES_URL, params)
+
+    def test_admin_and_bursar_see_tenant_invoices_with_balances(self):
+        from finance.models import Invoice
+        from finance.services import record_manual_payment
+
+        first = self.students[0]
+        record_manual_payment(
+            invoice=Invoice.objects.get(student=first, term=self.term),
+            amount=Decimal('50000.00'),
+            method='cash',
+            recorded_by=self.bursar,
+        )
+
+        for user in (self.admin, self.bursar):
+            response = self._list(user)
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+            self.assertEqual(response.data['count'], 5)
+            self.assertEqual(len(response.data['results']), 5)
+            ids = {str(row['id']) for row in response.data['results']}
+            self.assertIn(str(self.second_term_invoice.id), ids)
+            paid = next(
+                row
+                for row in response.data['results']
+                if str(row['student']) == str(first.id)
+                and str(row['term']) == str(self.term.id)
+            )
+            self.assertEqual(paid['student_name'], 'Last0, First0')
+            self.assertEqual(paid['admission_number'], 'ADM-000')
+            self.assertEqual(paid['total_amount'], '157500.50')
+            self.assertEqual(paid['amount_paid'], '50000.00')
+            self.assertEqual(paid['outstanding_amount'], '107500.50')
+            self.assertEqual(paid['status'], 'partially_paid')
+            self.assertEqual(paid['term_name'], '1st')
+
+    def test_parent_and_teacher_cannot_list(self):
+        for user in (self.parent, self.teacher):
+            response = self._list(user)
+            self.assertEqual(
+                response.status_code, status.HTTP_403_FORBIDDEN, user.email
+            )
+
+    def test_filter_by_term_and_class_level(self):
+        by_term = self._list(self.bursar, term=str(self.term.id))
+        self.assertEqual(by_term.status_code, status.HTTP_200_OK, by_term.data)
+        self.assertEqual(by_term.data['count'], 4)
+        self.assertTrue(
+            all(str(row['term']) == str(self.term.id) for row in by_term.data['results'])
+        )
+
+        second = self._list(self.admin, term=str(self.second_term.id))
+        self.assertEqual(second.data['count'], 1)
+        self.assertEqual(
+            str(second.data['results'][0]['id']), str(self.second_term_invoice.id)
+        )
+
+        jss1 = self._list(self.bursar, class_level=str(self.class_level.id))
+        self.assertEqual(jss1.data['count'], 3)
+        self.assertNotIn(
+            str(self.jss2_student.id),
+            {str(row['student']) for row in jss1.data['results']},
+        )
+
+        jss2 = self._list(
+            self.admin,
+            term=str(self.term.id),
+            class_level=str(self.other_class_level.id),
+        )
+        self.assertEqual(jss2.data['count'], 1)
+        self.assertEqual(jss2.data['results'][0]['admission_number'], 'ADM-JSS2')
+        self.assertEqual(jss2.data['results'][0]['total_amount'], '100000.00')
+
+        empty = self._list(
+            self.bursar,
+            term=str(self.second_term.id),
+            class_level=str(self.class_level.id),
+        )
+        self.assertEqual(empty.status_code, status.HTTP_200_OK)
+        self.assertEqual(empty.data['count'], 0)
+
+    def test_unknown_term_or_class_level_is_404(self):
+        import uuid
+
+        missing = str(uuid.uuid4())
+        term = self._list(self.bursar, term=missing)
+        self.assertEqual(term.status_code, status.HTTP_404_NOT_FOUND)
+        klass = self._list(self.admin, class_level=missing)
+        self.assertEqual(klass.status_code, status.HTTP_404_NOT_FOUND)
 
 
 # ---------------------------------------------------------------------------
