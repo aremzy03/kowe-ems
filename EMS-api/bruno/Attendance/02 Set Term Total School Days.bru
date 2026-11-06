@@ -1,0 +1,46 @@
+meta {
+  name: 02 Set Term Total School Days
+  type: http
+  seq: 2
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+patch {
+  url: {{baseUrl}}/api/academics/terms/{{termId}}/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "total_school_days": 60
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body) {
+    bru.setEnvVar("termTotalSchoolDays", String(res.body.total_school_days));
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.total_school_days: eq 60
+}
+
+tests {
+  test("admin sets explicit Term.total_school_days for attendance % denominator", function () {
+    expect(res.getBody().total_school_days).to.equal(60);
+  });
+}

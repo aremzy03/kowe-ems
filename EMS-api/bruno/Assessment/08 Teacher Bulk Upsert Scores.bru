@@ -1,0 +1,68 @@
+meta {
+  name: 08 Teacher Bulk Upsert Scores
+  type: http
+  seq: 8
+  tags: [
+    assessment
+    smoke
+    phase2
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/assessment/scores/bulk-upsert/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+body:json {
+  {
+    "entries": [
+      {
+        "student_id": "{{studentId}}",
+        "assessment_component_id": "{{component1stCaId}}",
+        "score": "18"
+      },
+      {
+        "student_id": "{{studentId}}",
+        "assessment_component_id": "{{component2ndCaId}}",
+        "score": "16"
+      },
+      {
+        "student_id": "{{studentId}}",
+        "assessment_component_id": "{{componentExamId}}",
+        "score": "72"
+      }
+    ]
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body) {
+    bru.setEnvVar("bulkSucceededFirst", String(res.body.succeeded));
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.succeeded: eq 3
+  res.body.failed: eq 0
+}
+
+tests {
+  test("first bulk upsert creates or updates all three scores", function () {
+    const body = res.getBody();
+    expect(body.count).to.equal(3);
+    expect(body.succeeded).to.equal(3);
+    for (const r of body.results) {
+      expect(r.success).to.equal(true);
+    }
+  });
+}

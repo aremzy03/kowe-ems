@@ -1,0 +1,47 @@
+meta {
+  name: 01 Parent Signup
+  type: http
+  seq: 1
+  tags: [
+    parents
+    smoke
+    phase1
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/memberships/parents/signup/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "email": "{{parentEmail}}",
+    "password": "{{parentPassword}}",
+    "first_name": "Bruno",
+    "last_name": "Parent"
+  }
+}
+
+script:pre-request {
+  const stamp = Date.now().toString(36);
+  const email = process.env.PARENT_EMAIL || `parent.bruno.${stamp}@example.com`;
+  bru.setEnvVar("parentEmail", email);
+  if (process.env.PARENT_PASSWORD) {
+    bru.setEnvVar("parentPassword", process.env.PARENT_PASSWORD);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.detail: eq Parent account created.
+  res.body.membership.role: eq parent
+  res.body.created_user: eq true
+}

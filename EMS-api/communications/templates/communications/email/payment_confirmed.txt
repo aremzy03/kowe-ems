@@ -1,0 +1,9 @@
+{% if greeting_name %}Hello {{ greeting_name }},{% else %}Hello,{% endif %}
+
+We received a payment for {{ student_name }} for {{ term_label }} at {{ school_name }}.
+
+Amount paid: {{ amount_paid }}
+Invoice total: {{ invoice_total }}
+
+Review the invoice in the parent portal:
+{{ portal_url }}

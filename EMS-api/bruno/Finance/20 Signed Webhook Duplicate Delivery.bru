@@ -1,0 +1,57 @@
+meta {
+  name: 20 Signed Webhook Duplicate Delivery
+  type: http
+  seq: 20
+  tags: [
+    finance
+    smoke
+    phase4
+    webhook
+    hmac
+    idempotency
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/webhooks/paystack/
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:text {
+  {}
+}
+
+script:pre-request {
+  const crypto = require("crypto");
+  const raw = bru.getEnvVar("webhookRawBody");
+  if (!raw) {
+    throw new Error("webhookRawBody missing — run 12/18 first so the bytes match.");
+  }
+  const secret = process.env.PAYSTACK_SECRET_KEY;
+  if (!secret) {
+    throw new Error("PAYSTACK_SECRET_KEY missing in bruno/.env (HMAC fixture).");
+  }
+  const sig = crypto.createHmac("sha512", secret).update(raw).digest("hex");
+  if (bru.getEnvVar("webhookSignature") && sig !== bru.getEnvVar("webhookSignature")) {
+    throw new Error("Duplicate delivery HMAC does not match first delivery.");
+  }
+  req.setHeader("X-Paystack-Signature", sig);
+  req.setBody(raw);
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("identical second charge.success POST is a 200 no-op (Paystack retry)", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(bru.getEnvVar("webhookRawBody")).to.be.a("string");
+  });
+}

@@ -1,0 +1,41 @@
+meta {
+  name: 24 Parent My Invoices Own Child Only
+  type: http
+  seq: 24
+  tags: [
+    finance
+    smoke
+    phase4
+    parents
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/finance/my-invoices/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("parent still sees only the linked child, paid once", function () {
+    const body = res.getBody();
+    expect(body.count).to.equal(1);
+    const inv = body.results[0];
+    expect(String(inv.student)).to.equal(String(bru.getEnvVar("studentId")));
+    expect(inv.student).to.not.equal(bru.getEnvVar("cashStudentId"));
+    expect(inv.id).to.not.equal(bru.getEnvVar("cashInvoiceId"));
+    expect(inv.status).to.equal("paid");
+    expect(inv.amount_paid).to.equal(bru.getEnvVar("parentInvoiceTotal"));
+    expect(inv.line_items.length).to.be.at.least(2);
+  });
+}

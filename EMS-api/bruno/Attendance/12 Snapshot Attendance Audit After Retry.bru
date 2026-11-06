@@ -1,0 +1,43 @@
+meta {
+  name: 12 Snapshot Attendance Audit After Retry
+  type: http
+  seq: 12
+  tags: [
+    attendance
+    smoke
+    phase3
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/audit-logs/?student={{studentId}}&date={{attendanceDate}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const logs = Array.isArray(body) ? body : body.results || [];
+    bru.setEnvVar("attendanceAuditCountAfterRetry", String(logs.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("identical retry produces no false AttendanceAuditLog churn", function () {
+    expect(Number(bru.getEnvVar("attendanceAuditCountAfterRetry"))).to.equal(
+      Number(bru.getEnvVar("attendanceAuditCountAfterFirst"))
+    );
+  });
+}

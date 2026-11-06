@@ -1,0 +1,47 @@
+meta {
+  name: 15 Enroll Unassigned Arm Student
+  type: http
+  seq: 15
+  tags: [
+    attendance
+    smoke
+    phase3
+    rbac
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/enrollments/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "student": "{{unassignedArmStudentId}}",
+    "class_level": "{{classLevelId}}",
+    "arm": "{{unassignedArmId}}",
+    "session": "{{sessionId}}",
+    "term": "{{termId}}",
+    "status": "active"
+  }
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("unassignedArmEnrollmentId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.status: eq active
+}

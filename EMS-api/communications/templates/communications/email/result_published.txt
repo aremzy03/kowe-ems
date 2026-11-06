@@ -1,0 +1,6 @@
+{% if greeting_name %}Hello {{ greeting_name }},{% else %}Hello,{% endif %}
+
+Results for {{ student_name }} for {{ term_label }} at {{ school_name }} are now available.
+
+Sign in to the parent portal to view the full report:
+{{ portal_url }}

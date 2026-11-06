@@ -1,0 +1,27 @@
+meta {
+  name: 05 Teacher My Components
+  type: http
+  seq: 5
+  tags: [
+    assessment
+    smoke
+    phase2
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/my-components/?subject={{subjectId}}&class_level={{classLevelId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.count: eq 3
+}

@@ -1,0 +1,54 @@
+meta {
+  name: 24 Create Unassigned Subject
+  type: http
+  seq: 24
+  tags: [
+    assessment
+    smoke
+    phase2
+    rbac
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/subjects/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "name": "English Literature",
+    "code": "{{unassignedSubjectCode}}"
+  }
+}
+
+script:pre-request {
+  const stamp = Date.now().toString(36).toUpperCase().slice(-6);
+  bru.setEnvVar("unassignedSubjectCode", `ENG${stamp}`);
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("unassignedSubjectId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+}
+
+tests {
+  test("unassigned subject exists for teacher RBAC negatives", function () {
+    expect(bru.getEnvVar("unassignedSubjectId")).to.be.a("string");
+    expect(bru.getEnvVar("unassignedSubjectId")).to.not.equal(bru.getEnvVar("subjectId"));
+  });
+}

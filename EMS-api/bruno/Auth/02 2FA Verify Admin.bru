@@ -1,0 +1,115 @@
+meta {
+  name: 02 2FA Verify Admin
+  type: http
+  seq: 2
+  tags: [
+    auth
+    smoke
+    phase1
+    2fa
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/auth/2fa/verify/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "pre_auth_token": "{{preAuthToken}}",
+    "totp_code": "{{totpCode}}"
+  }
+}
+
+script:pre-request {
+  function base32Decode(input) {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let bits = "";
+    const cleaned = String(input).toUpperCase().replace(/=+$/, "").replace(/[^A-Z2-7]/g, "");
+    for (const c of cleaned) {
+      const val = alphabet.indexOf(c);
+      if (val < 0) continue;
+      bits += val.toString(2).padStart(5, "0");
+    }
+    const bytes = [];
+    for (let i = 0; i + 8 <= bits.length; i += 8) {
+      bytes.push(parseInt(bits.slice(i, i + 8), 2));
+    }
+    return Buffer.from(bytes);
+  }
+
+  function generateTOTP(secret, step = 30, digits = 6) {
+    const crypto = require("crypto");
+    const key = base32Decode(secret);
+    const counter = Math.floor(Date.now() / 1000 / step);
+    const buf = Buffer.alloc(8);
+    buf.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
+    buf.writeUInt32BE(counter >>> 0, 4);
+    const hmac = crypto.createHmac("sha1", key).update(buf).digest();
+    const offset = hmac[hmac.length - 1] & 0xf;
+    const code =
+      ((hmac[offset] & 0x7f) << 24) |
+      ((hmac[offset + 1] & 0xff) << 16) |
+      ((hmac[offset + 2] & 0xff) << 8) |
+      (hmac[offset + 3] & 0xff);
+    return String(code % 10 ** digits).padStart(digits, "0");
+  }
+
+  // Already issued full tokens (e.g. non-2FA role) — send a harmless placeholder;
+  // assertion below accepts either a fresh token response or a prior accessToken.
+  if (bru.getEnvVar("requires2fa") === "false" && bru.getEnvVar("accessToken")) {
+    bru.setVar("totpCode", "000000");
+    return;
+  }
+
+  const secret = process.env.ADMIN_TOTP_SECRET || bru.getEnvVar("totpSecret");
+  if (!secret) {
+    throw new Error(
+      "ADMIN_TOTP_SECRET missing. Set it in bruno/.env (enrolled admin) or run 2FA enroll first."
+    );
+  }
+  bru.setVar("totpCode", generateTOTP(secret));
+}
+
+script:post-response {
+  function extractCookie(headerVal, name) {
+    const parts = Array.isArray(headerVal) ? headerVal : [headerVal];
+    for (const p of parts) {
+      if (!p) continue;
+      const m = String(p).match(new RegExp(name + "=([^;]+)"));
+      if (m) return decodeURIComponent(m[1]);
+    }
+    return null;
+  }
+
+  if (res.status === 200 && res.body && res.body.access) {
+    bru.setEnvVar("accessToken", res.body.access);
+    const setCookie = res.headers["set-cookie"] || res.headers["Set-Cookie"];
+    const csrf = extractCookie(setCookie, "csrftoken");
+    if (csrf) {
+      bru.setEnvVar("csrfToken", csrf);
+    }
+  }
+}
+
+tests {
+  test("admin obtains access token after 2FA (or already had one)", function () {
+    if (bru.getEnvVar("requires2fa") === "false" && bru.getEnvVar("accessToken")) {
+      expect(bru.getEnvVar("accessToken")).to.be.a("string");
+      return;
+    }
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.access).to.be.a("string");
+    expect(body.requires_2fa).to.equal(false);
+    expect(body.role).to.equal("admin");
+  });
+}

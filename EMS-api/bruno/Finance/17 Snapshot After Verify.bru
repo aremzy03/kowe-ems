@@ -1,0 +1,44 @@
+meta {
+  name: 17 Snapshot After Verify
+  type: http
+  seq: 17
+  tags: [
+    finance
+    smoke
+    phase4
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/finance/my-invoices/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 200 && body.results && body.results[0]) {
+    bru.setEnvVar("parentInvoicePaidAfterVerify", String(body.results[0].amount_paid));
+    bru.setEnvVar("parentInvoiceStatusAfterVerify", body.results[0].status);
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("one successful verify credits the invoice once", function () {
+    const inv = res.getBody().results[0];
+    expect(inv.status).to.equal("paid");
+    expect(inv.amount_paid).to.equal(bru.getEnvVar("parentInvoiceTotal"));
+    expect(inv.outstanding_amount).to.equal("0.00");
+  });
+}

@@ -1,0 +1,73 @@
+meta {
+  name: 01 Login Admin
+  type: http
+  seq: 1
+  tags: [
+    auth
+    smoke
+    phase1
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/auth/login/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "email": "{{process.env.ADMIN_EMAIL}}",
+    "password": "{{process.env.ADMIN_PASSWORD}}"
+  }
+}
+
+script:post-response {
+  function extractCookie(headerVal, name) {
+    const parts = Array.isArray(headerVal) ? headerVal : [headerVal];
+    for (const p of parts) {
+      if (!p) continue;
+      const m = String(p).match(new RegExp(name + "=([^;]+)"));
+      if (m) return decodeURIComponent(m[1]);
+    }
+    return null;
+  }
+
+  const setCookie = res.headers["set-cookie"] || res.headers["Set-Cookie"];
+  const csrf = extractCookie(setCookie, "csrftoken");
+  if (csrf) {
+    bru.setEnvVar("csrfToken", csrf);
+  }
+
+  if (res.status === 200 && res.body) {
+    if (res.body.access) {
+      bru.setEnvVar("accessToken", res.body.access);
+    }
+    if (res.body.pre_auth_token) {
+      bru.setEnvVar("preAuthToken", res.body.pre_auth_token);
+    }
+    bru.setEnvVar("enrollmentRequired", String(!!res.body.enrollment_required));
+    bru.setEnvVar("requires2fa", String(!!res.body.requires_2fa));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("admin login returns tokens or 2FA challenge", function () {
+    const body = res.getBody();
+    expect(body.requires_2fa === true || !!body.access).to.equal(true);
+    if (body.requires_2fa) {
+      expect(body.pre_auth_token).to.be.a("string");
+      expect(body.role).to.equal("admin");
+    }
+  });
+}

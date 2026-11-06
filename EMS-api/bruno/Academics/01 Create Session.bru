@@ -1,0 +1,49 @@
+meta {
+  name: 01 Create Session
+  type: http
+  seq: 1
+  tags: [
+    academics
+    smoke
+    phase1
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/sessions/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "name": "{{sessionName}}",
+    "start_date": "2026-09-01",
+    "end_date": "2027-07-31",
+    "is_active": true
+  }
+}
+
+script:pre-request {
+  const stamp = Date.now().toString(36);
+  bru.setEnvVar("sessionName", `2026/2027-Bruno-${stamp}`);
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("sessionId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.is_active: eq true
+}

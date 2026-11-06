@@ -1,0 +1,35 @@
+meta {
+  name: 15 Snapshot After Invalid HMAC
+  type: http
+  seq: 15
+  tags: [
+    finance
+    smoke
+    phase4
+    webhook
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/finance/my-invoices/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("invalid HMAC webhook did not credit the invoice", function () {
+    const inv = res.getBody().results[0];
+    expect(inv.status).to.equal("unpaid");
+    expect(inv.amount_paid).to.equal("0.00");
+  });
+}

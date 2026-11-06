@@ -1,0 +1,35 @@
+meta {
+  name: 13 Snapshot After Unsigned Webhook
+  type: http
+  seq: 13
+  tags: [
+    finance
+    smoke
+    phase4
+    webhook
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/finance/my-invoices/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("unsigned webhook did not apply (invoice still unpaid)", function () {
+    const inv = res.getBody().results[0];
+    expect(inv.status).to.equal("unpaid");
+    expect(inv.amount_paid).to.equal("0.00");
+  });
+}

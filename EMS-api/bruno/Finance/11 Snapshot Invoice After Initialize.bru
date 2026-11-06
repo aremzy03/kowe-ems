@@ -1,0 +1,43 @@
+meta {
+  name: 11 Snapshot Invoice After Initialize
+  type: http
+  seq: 11
+  tags: [
+    finance
+    smoke
+    phase4
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/finance/my-invoices/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 200 && body.results && body.results[0]) {
+    bru.setEnvVar("parentInvoicePaidAfterInit", String(body.results[0].amount_paid));
+    bru.setEnvVar("parentInvoiceStatusAfterInit", body.results[0].status);
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("initialize does not mark the invoice paid (frontend redirect is not trusted)", function () {
+    const inv = res.getBody().results[0];
+    expect(inv.status).to.equal("unpaid");
+    expect(inv.amount_paid).to.equal("0.00");
+  });
+}

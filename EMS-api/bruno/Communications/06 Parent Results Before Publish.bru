@@ -1,0 +1,45 @@
+meta {
+  name: 06 Parent Results Before Publish
+  type: http
+  seq: 6
+  tags: [
+    communications
+    smoke
+    phase5
+    parents
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/results/student/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("linked parent gets an empty payload before publish", function () {
+    const body = res.getBody();
+    expect(body.summary).to.equal(null);
+    expect(body.subject_results).to.be.an("array");
+    expect(body.subject_results.length).to.equal(0);
+    expect(body.is_published).to.equal(false);
+    expect(body.detail).to.equal("Results for this term have not been published yet.");
+    expect(body).to.not.have.property("overall_average");
+    expect(String(body.student)).to.equal(String(bru.getEnvVar("studentId")));
+  });
+}
+
+docs {
+  HTTP 200 with summary null and subject_results []. Scores stay off the
+  parent payload until an admin publishes. This is not a 403.
+}

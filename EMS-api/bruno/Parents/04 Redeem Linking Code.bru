@@ -1,0 +1,45 @@
+meta {
+  name: 04 Redeem Linking Code
+  type: http
+  seq: 4
+  tags: [
+    parents
+    smoke
+    phase1
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/linking-codes/redeem/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+body:json {
+  {
+    "code": "{{linkingCode}}",
+    "relationship_to_student": "guardian"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.detail: eq Linking code redeemed.
+  res.body.code: isDefined
+  res.body.student_id: isDefined
+}
+
+tests {
+  test("redeem returns confirmation without leaking unrelated students", function () {
+    const body = res.getBody();
+    expect(body.student_id).to.equal(bru.getEnvVar("studentId"));
+    expect(body).to.not.have.property("results");
+  });
+}

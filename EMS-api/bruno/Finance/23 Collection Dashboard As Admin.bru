@@ -1,0 +1,46 @@
+meta {
+  name: 23 Collection Dashboard As Admin
+  type: http
+  seq: 23
+  tags: [
+    finance
+    smoke
+    phase4
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/finance/dashboard/collections/?term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("admin collection dashboard for the term, broken down by class", function () {
+    const body = res.getBody();
+    expect(body.term.id).to.equal(bru.getEnvVar("termId"));
+    expect(body.invoice_count).to.be.at.least(2);
+    expect(body.paid_count).to.be.at.least(2);
+    const expectedCollected =
+      Number(bru.getEnvVar("parentInvoiceTotal")) +
+      Number(bru.getEnvVar("cashInvoiceTotal"));
+    expect(Number(body.collected_total)).to.be.at.least(expectedCollected);
+    expect(body.by_class).to.be.an("array");
+    expect(body.by_class.length).to.be.at.least(1);
+    const row = body.by_class.find(
+      (c) => String(c.class_level_id) === String(bru.getEnvVar("classLevelId"))
+    );
+    expect(row).to.be.an("object");
+    expect(row.paid_count).to.be.at.least(2);
+  });
+}

@@ -1,0 +1,69 @@
+meta {
+  name: 18 Signed Webhook First Delivery
+  type: http
+  seq: 18
+  tags: [
+    finance
+    smoke
+    phase4
+    webhook
+    hmac
+    idempotency
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/webhooks/paystack/
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:text {
+  {}
+}
+
+script:pre-request {
+  const crypto = require("crypto");
+  function chargeSuccessRaw() {
+    const existing = bru.getEnvVar("webhookRawBody");
+    if (existing) return existing;
+    const payload = {
+      event: "charge.success",
+      data: {
+        id: 424242,
+        status: "success",
+        reference: bru.getEnvVar("paymentReference"),
+        amount: Number(bru.getEnvVar("paymentAmountKobo")),
+        currency: "NGN",
+        subaccount: { subaccount_code: bru.getEnvVar("subaccountCode") },
+      },
+    };
+    const raw = JSON.stringify(payload);
+    bru.setEnvVar("webhookRawBody", raw);
+    return raw;
+  }
+  const raw = chargeSuccessRaw();
+  const secret = process.env.PAYSTACK_SECRET_KEY;
+  if (!secret) {
+    throw new Error("PAYSTACK_SECRET_KEY missing in bruno/.env (HMAC fixture).");
+  }
+  const sig = crypto.createHmac("sha512", secret).update(raw).digest("hex");
+  bru.setEnvVar("webhookSignature", sig);
+  req.setHeader("X-Paystack-Signature", sig);
+  req.setBody(raw);
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("first signed charge.success is acknowledged", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

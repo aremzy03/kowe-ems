@@ -1,0 +1,36 @@
+meta {
+  name: 18 Set Admin Remark
+  type: http
+  seq: 18
+  tags: [
+    assessment
+    smoke
+    phase2
+  ]
+}
+
+patch {
+  url: {{baseUrl}}/api/assessment/results/remarks/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "student": "{{studentId}}",
+    "term": "{{termId}}",
+    "admin_remark": "Promoted with commendation from the school admin."
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.admin_remark: eq Promoted with commendation from the school admin.
+}

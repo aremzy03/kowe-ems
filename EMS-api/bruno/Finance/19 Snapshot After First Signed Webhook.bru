@@ -1,0 +1,44 @@
+meta {
+  name: 19 Snapshot After First Signed Webhook
+  type: http
+  seq: 19
+  tags: [
+    finance
+    smoke
+    phase4
+    webhook
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/finance/my-invoices/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 200 && body.results && body.results[0]) {
+    bru.setEnvVar("parentInvoicePaidAfterWebhook1", String(body.results[0].amount_paid));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("webhook after verify does not increase amount_paid", function () {
+    const inv = res.getBody().results[0];
+    expect(inv.status).to.equal("paid");
+    expect(inv.amount_paid).to.equal(bru.getEnvVar("parentInvoicePaidAfterVerify"));
+    expect(inv.amount_paid).to.equal(bru.getEnvVar("parentInvoiceTotal"));
+  });
+}

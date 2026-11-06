@@ -1,0 +1,85 @@
+meta {
+  name: 09 2FA Enroll Confirm
+  type: http
+  seq: 9
+  tags: [
+    auth
+    phase1
+    2fa
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/auth/2fa/enroll/confirm/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{bursarPreAuthToken}}
+}
+
+body:json {
+  {
+    "totp_code": "{{totpCode}}",
+    "issue_tokens": true
+  }
+}
+
+script:pre-request {
+  function base32Decode(input) {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let bits = "";
+    const cleaned = String(input).toUpperCase().replace(/=+$/, "").replace(/[^A-Z2-7]/g, "");
+    for (const c of cleaned) {
+      const val = alphabet.indexOf(c);
+      if (val < 0) continue;
+      bits += val.toString(2).padStart(5, "0");
+    }
+    const bytes = [];
+    for (let i = 0; i + 8 <= bits.length; i += 8) {
+      bytes.push(parseInt(bits.slice(i, i + 8), 2));
+    }
+    return Buffer.from(bytes);
+  }
+
+  function generateTOTP(secret, step = 30, digits = 6) {
+    const crypto = require("crypto");
+    const key = base32Decode(secret);
+    const counter = Math.floor(Date.now() / 1000 / step);
+    const buf = Buffer.alloc(8);
+    buf.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
+    buf.writeUInt32BE(counter >>> 0, 4);
+    const hmac = crypto.createHmac("sha1", key).update(buf).digest();
+    const offset = hmac[hmac.length - 1] & 0xf;
+    const code =
+      ((hmac[offset] & 0x7f) << 24) |
+      ((hmac[offset + 1] & 0xff) << 16) |
+      ((hmac[offset + 2] & 0xff) << 8) |
+      (hmac[offset + 3] & 0xff);
+    return String(code % 10 ** digits).padStart(digits, "0");
+  }
+
+  const secret = bru.getEnvVar("totpSecret");
+  if (!secret) {
+    throw new Error("totpSecret missing — run 08 2FA Enroll first.");
+  }
+  bru.setVar("totpCode", generateTOTP(secret));
+}
+
+script:post-response {
+  if (res.status === 200 && res.body && res.body.access) {
+    // Bursar session tokens — keep admin accessToken intact for Academics.
+    bru.setEnvVar("bursarAccessToken", res.body.access);
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.enrollment_complete: eq true
+  res.body.access: isDefined
+  res.body.role: eq bursar
+}

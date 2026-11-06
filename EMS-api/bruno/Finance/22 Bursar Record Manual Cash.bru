@@ -1,0 +1,58 @@
+meta {
+  name: 22 Bursar Record Manual Cash
+  type: http
+  seq: 22
+  tags: [
+    finance
+    smoke
+    phase4
+    bursar
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/finance/payments/manual/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{bursarAccessToken}}
+}
+
+body:json {
+  {
+    "invoice": "{{cashInvoiceId}}",
+    "amount": "{{cashInvoiceTotal}}",
+    "method": "cash",
+    "notes": "Bruno Phase 4 cash at bursar desk"
+  }
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 201) {
+    bru.setEnvVar("manualPaymentId", body.payment_id);
+    bru.setEnvVar("manualPaymentReference", body.reference);
+    bru.setEnvVar("cashInvoiceStatusAfterManual", body.invoice_status);
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+tests {
+  test("bursar cash creates SUCCESS manual payment, not Paystack", function () {
+    const body = res.getBody();
+    expect(body.gateway).to.equal("manual");
+    expect(body.method).to.equal("cash");
+    expect(body.payment_status).to.equal("success");
+    expect(body.invoice_status).to.equal("paid");
+    expect(body.reference).to.match(/^manual-/);
+    expect(body.amount).to.equal(bru.getEnvVar("cashInvoiceTotal"));
+  });
+}

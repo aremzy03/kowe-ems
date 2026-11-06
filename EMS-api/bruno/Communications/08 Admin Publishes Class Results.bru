@@ -1,0 +1,74 @@
+meta {
+  name: 08 Admin Publishes Class Results
+  type: http
+  seq: 8
+  tags: [
+    communications
+    smoke
+    phase5
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/assessment/results/publish/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "class_level": "{{classLevelId}}",
+    "arm": "{{armId}}",
+    "term": "{{termId}}"
+  }
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 200 && Array.isArray(body.summaries)) {
+    const studentId = String(bru.getEnvVar("studentId"));
+    const mine = body.summaries.find((row) => String(row.student) === studentId);
+    if (mine && mine.id) {
+      bru.setEnvVar("resultSummaryId", mine.id);
+    }
+    if (body.newly_published_count !== undefined && body.newly_published_count !== null) {
+      bru.setEnvVar("newlyPublishedCount", String(body.newly_published_count));
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.detail: eq Results published.
+}
+
+tests {
+  test("first publish releases the linked student's summary", function () {
+    const body = res.getBody();
+    expect(body.newly_published_count).to.be.at.least(1);
+    expect(body.published_count).to.be.at.least(1);
+    expect(body.class_level).to.equal(bru.getEnvVar("classLevelId"));
+    expect(body.arm).to.equal(bru.getEnvVar("armId"));
+    expect(body.term).to.equal(bru.getEnvVar("termId"));
+    const studentId = String(bru.getEnvVar("studentId"));
+    const mine = body.summaries.find((row) => String(row.student) === studentId);
+    expect(mine).to.be.an("object");
+    expect(mine.id).to.equal(bru.getEnvVar("resultSummaryId"));
+    expect(mine.is_published).to.equal(true);
+    expect(mine.published_at).to.be.a("string");
+  });
+}
+
+docs {
+  School admin with confirmed TOTP only. Notifications are queued on
+  commit for summaries that were unpublished. A second publish refreshes
+  published_at and does not queue again; this folder publishes once.
+  No Celery worker is required for the HTTP response.
+}

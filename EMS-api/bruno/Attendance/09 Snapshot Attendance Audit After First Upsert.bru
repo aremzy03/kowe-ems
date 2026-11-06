@@ -1,0 +1,43 @@
+meta {
+  name: 09 Snapshot Attendance Audit After First Upsert
+  type: http
+  seq: 9
+  tags: [
+    attendance
+    smoke
+    phase3
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/audit-logs/?student={{studentId}}&date={{attendanceDate}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const logs = Array.isArray(body) ? body : body.results || [];
+    bru.setEnvVar("attendanceAuditCountAfterFirst", String(logs.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("first upsert writes one AttendanceAuditLog for the create", function () {
+    const before = Number(bru.getEnvVar("attendanceAuditCountBefore") || "0");
+    const after = Number(bru.getEnvVar("attendanceAuditCountAfterFirst"));
+    expect(after).to.equal(before + 1);
+  });
+}

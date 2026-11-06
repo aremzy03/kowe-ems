@@ -1,0 +1,74 @@
+meta {
+  name: 04 Payment Notification Queued
+  type: http
+  seq: 4
+  tags: [
+    communications
+    smoke
+    phase5
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/communications/notifications/?trigger_type=payment_confirmed
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (res.status === 200 && Array.isArray(body)) {
+    const paymentId = String(bru.getEnvVar("manualPaymentId"));
+    const email = body.find(
+      (row) =>
+        String(row.related_object_id) === paymentId && row.channel === "email"
+    );
+    if (email) {
+      bru.setEnvVar("paymentEmailNotificationId", email.id);
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("manual success queues payment_confirmed email for the linked parent", function () {
+    const body = res.getBody();
+    expect(Array.isArray(body)).to.equal(true);
+    for (const row of body) {
+      expect(row.trigger_type).to.equal("payment_confirmed");
+    }
+    const paymentId = String(bru.getEnvVar("manualPaymentId"));
+    const parentEmail = String(bru.getEnvVar("parentEmail") || "").toLowerCase();
+    const mine = body.filter((row) => String(row.related_object_id) === paymentId);
+    const email = mine.filter((row) => row.channel === "email");
+    const whatsapp = mine.filter((row) => row.channel === "whatsapp");
+    expect(email.length).to.equal(1);
+    expect(whatsapp.length).to.equal(0);
+    const row = email[0];
+    expect(row.id).to.equal(bru.getEnvVar("paymentEmailNotificationId"));
+    expect(row.recipient_email.toLowerCase()).to.equal(parentEmail);
+    expect(row.channel).to.equal("email");
+    expect(row.status === "queued" || row.status === "sent").to.equal(true);
+    expect(row.related_object_id).to.be.a("string");
+    if (row.status === "queued") {
+      expect(row.sent_at).to.equal(null);
+      expect(row.error_message).to.equal(null);
+    }
+  });
+}
+
+docs {
+  related_object_id is the Payment id, not the invoice. WhatsApp is omitted
+  because the linked guardian phone is blank. queued is the expected status
+  when no worker is running; sent is accepted if a worker already delivered
+  the console email. Do not require status=sent.
+}

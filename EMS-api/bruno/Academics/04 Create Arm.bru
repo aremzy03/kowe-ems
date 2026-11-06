@@ -1,0 +1,42 @@
+meta {
+  name: 04 Create Arm
+  type: http
+  seq: 4
+  tags: [
+    academics
+    smoke
+    phase1
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/arms/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "class_level": "{{classLevelId}}",
+    "name": "A"
+  }
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("armId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.name: eq A
+}

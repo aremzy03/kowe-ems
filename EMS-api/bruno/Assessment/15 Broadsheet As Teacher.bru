@@ -1,0 +1,38 @@
+meta {
+  name: 15 Broadsheet As Teacher
+  type: http
+  seq: 15
+  tags: [
+    assessment
+    smoke
+    phase2
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/broadsheet/?class_level={{classLevelId}}&arm={{armId}}&term={{termId}}&subject={{subjectId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.scope: eq teacher
+}
+
+tests {
+  test("teacher broadsheet is table-ready for assigned subject", function () {
+    const body = res.getBody();
+    expect(body.scope).to.equal("teacher");
+    expect(body.columns).to.be.an("array");
+    expect(body.rows).to.be.an("array");
+    expect(body.rows.length).to.be.at.least(1);
+    expect(body.columns.length).to.be.at.least(1);
+  });
+}

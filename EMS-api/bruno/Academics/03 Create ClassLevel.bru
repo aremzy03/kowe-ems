@@ -1,0 +1,45 @@
+meta {
+  name: 03 Create ClassLevel
+  type: http
+  seq: 3
+  tags: [
+    academics
+    smoke
+    phase1
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/class-levels/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "name": "{{classLevelName}}"
+  }
+}
+
+script:pre-request {
+  const stamp = Date.now().toString(36);
+  bru.setEnvVar("classLevelName", `JSS1-Bruno-${stamp}`);
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("classLevelId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+}

@@ -1,0 +1,42 @@
+meta {
+  name: 09 Parent Results After Publish
+  type: http
+  seq: 9
+  tags: [
+    communications
+    smoke
+    phase5
+    parents
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/results/student/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("linked parent sees the published summary and subject scores", function () {
+    const body = res.getBody();
+    expect(body.summary).to.be.an("object");
+    expect(body.summary.is_published).to.equal(true);
+    expect(body.summary.id).to.equal(bru.getEnvVar("resultSummaryId"));
+    expect(body.summary.published_at).to.be.a("string");
+    expect(body.summary.overall_average).to.not.equal(null);
+    expect(body.subject_results).to.be.an("array");
+    expect(body.subject_results.length).to.be.at.least(1);
+    expect(body.subject_results[0].computed_score).to.be.a("string");
+    expect(String(body.student)).to.equal(String(bru.getEnvVar("studentId")));
+  });
+}

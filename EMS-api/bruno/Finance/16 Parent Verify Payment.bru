@@ -1,0 +1,51 @@
+meta {
+  name: 16 Parent Verify Payment
+  type: http
+  seq: 16
+  tags: [
+    finance
+    smoke
+    phase4
+    paystack
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/finance/payments/verify/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+body:json {
+  {
+    "reference": "{{paymentReference}}"
+  }
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 200) {
+    bru.setEnvVar("paymentStatusAfterVerify", body.payment_status);
+    bru.setEnvVar("invoiceStatusAfterVerify", body.invoice_status);
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("return-flow verify marks payment success (not the frontend redirect)", function () {
+    const body = res.getBody();
+    expect(body.payment_status).to.equal("success");
+    expect(body.invoice_status).to.equal("paid");
+    expect(body.reference).to.equal(bru.getEnvVar("paymentReference"));
+  });
+}

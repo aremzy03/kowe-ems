@@ -1,0 +1,44 @@
+meta {
+  name: 05 Admin Results Before Publish
+  type: http
+  seq: 5
+  tags: [
+    communications
+    smoke
+    phase5
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/results/student/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("admin sees unpublished scores before the release", function () {
+    const body = res.getBody();
+    expect(body.summary).to.be.an("object");
+    expect(body.summary.is_published).to.equal(false);
+    expect(body.summary.published_at).to.equal(null);
+    expect(body.subject_results).to.be.an("array");
+    expect(body.subject_results.length).to.be.at.least(1);
+    expect(body.subject_results[0].computed_score).to.be.a("string");
+    expect(String(body.student)).to.equal(String(bru.getEnvVar("studentId")));
+  });
+}
+
+docs {
+  Staff reads are not gated on is_published. This request proves a summary
+  exists, so the following parent read is empty because of the gate.
+}

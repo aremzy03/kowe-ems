@@ -1,0 +1,41 @@
+meta {
+  name: 17 Class Register As Teacher
+  type: http
+  seq: 17
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/register/?class_level={{classLevelId}}&arm={{armId}}&term={{termId}}&month=2026-09
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("class teacher can fetch student × date register grid", function () {
+    const body = res.getBody();
+    expect(body.class_level_id).to.equal(bru.getEnvVar("classLevelId"));
+    expect(body.arm_id).to.equal(bru.getEnvVar("armId"));
+    expect(body.students).to.be.an("array");
+    expect(body.dates).to.include(bru.getEnvVar("attendanceDate"));
+    const row = body.grid.find((g) => g.student.id === bru.getEnvVar("studentId"));
+    expect(row).to.exist;
+    const cell = row.cells.find((c) => c.date === bru.getEnvVar("attendanceDate"));
+    expect(cell).to.exist;
+    expect(cell.status).to.equal("present");
+  });
+}

@@ -1,0 +1,49 @@
+meta {
+  name: 02 Get Payment Account
+  type: http
+  seq: 2
+  tags: [
+    finance
+    smoke
+    phase4
+    paystack
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/finance/payment-account/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 200 && body.onboarded && body.account) {
+    bru.setEnvVar("subaccountCode", body.account.subaccount_code);
+    bru.setEnvVar("maskedAccountNumber", body.account.account_number);
+    bru.setEnvVar("paymentAccountId", body.account.id);
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("active verified account, account_number masked", function () {
+    const body = res.getBody();
+    expect(body.onboarded).to.equal(true);
+    expect(body.account.is_verified).to.equal(true);
+    expect(body.account.is_active).to.equal(true);
+    expect(body.account.bank_code).to.equal("057");
+    expect(body.account.account_number).to.equal("****0000");
+    expect(JSON.stringify(body)).to.not.contain("0000000000");
+    expect(body.account.subaccount_code).to.be.a("string");
+  });
+}

@@ -1,0 +1,39 @@
+meta {
+  name: 27 Report Card PDF With Attendance
+  type: http
+  seq: 27
+  tags: [
+    attendance
+    smoke
+    phase3
+    report-card
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/report-cards/?student={{studentId}}&term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: */*
+  Authorization: Bearer {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("admin can download report card PDF after attendance marking", function () {
+    expect(res.getStatus()).to.equal(200);
+    const ct = res.getHeader("content-type") || res.getHeader("Content-Type") || "";
+    expect(String(ct)).to.match(/application\/pdf/i);
+    const cd = res.getHeader("content-disposition") || res.getHeader("Content-Disposition") || "";
+    expect(String(cd)).to.match(/attachment/i);
+    // Numeric attendance proof is in Attendance/18–20 + scripts/verify-report-card-attendance.sh
+    // (WeasyPrint Flate streams are not plain-text searchable in Bruno).
+  });
+}

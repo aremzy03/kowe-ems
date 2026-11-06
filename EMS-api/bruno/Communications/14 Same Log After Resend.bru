@@ -1,0 +1,54 @@
+meta {
+  name: 14 Same Log After Resend
+  type: http
+  seq: 14
+  tags: [
+    communications
+    smoke
+    phase5
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/communications/notifications/?trigger_type={{resendTriggerType}}&channel={{resendChannel}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("resend keeps a single log for that object, channel, and trigger", function () {
+    const body = res.getBody();
+    expect(Array.isArray(body)).to.equal(true);
+    const trigger = bru.getEnvVar("resendTriggerType");
+    const channel = bru.getEnvVar("resendChannel");
+    for (const row of body) {
+      expect(row.trigger_type).to.equal(trigger);
+      expect(row.channel).to.equal(channel);
+    }
+    const related = String(bru.getEnvVar("resendRelatedObjectId"));
+    const matches = body.filter((row) => String(row.related_object_id) === related);
+    expect(matches.length).to.equal(Number(bru.getEnvVar("resendMatchCount")));
+    const target = matches.find((row) => row.id === bru.getEnvVar("resendTargetId"));
+    expect(target).to.be.an("object");
+    if (bru.getEnvVar("resendExpectStatus") === "400") {
+      expect(target.status === "queued" || target.status === "sent").to.equal(true);
+    }
+  });
+}
+
+docs {
+  Confirms the resend call did not insert a second row. Filters are
+  AND-combined: trigger_type and channel. The detail route is
+  GET /api/communications/notifications/{id}/; this list is enough to
+  count rows for the same related object.
+}

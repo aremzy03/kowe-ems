@@ -1,0 +1,65 @@
+meta {
+  name: 07 Generate Invoices For Class
+  type: http
+  seq: 7
+  tags: [
+    finance
+    smoke
+    phase4
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/finance/invoices/generate/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "class_level": "{{classLevelId}}",
+    "term": "{{termId}}"
+  }
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if ((res.status === 201 || res.status === 200) && Array.isArray(body.invoices)) {
+    bru.setEnvVar("invoiceCreatedCount", String(body.created_count));
+    bru.setEnvVar("invoiceSkippedCount", String(body.skipped_count));
+    const parentId = bru.getEnvVar("studentId");
+    const cashId = bru.getEnvVar("cashStudentId");
+    for (const inv of body.invoices) {
+      if (String(inv.student) === String(parentId)) {
+        bru.setEnvVar("parentInvoiceId", inv.id);
+        bru.setEnvVar("parentInvoiceTotal", String(inv.total_amount));
+      }
+      if (String(inv.student) === String(cashId)) {
+        bru.setEnvVar("cashInvoiceId", inv.id);
+        bru.setEnvVar("cashInvoiceTotal", String(inv.total_amount));
+      }
+    }
+  }
+}
+
+tests {
+  test("class generate creates or skips invoices for both students", function () {
+    const status = res.getStatus();
+    expect(status === 201 || status === 200).to.equal(true);
+    const body = res.getBody();
+    expect(body.created_count + body.skipped_count).to.be.at.least(2);
+    if (body.created_count >= 2) {
+      expect(bru.getEnvVar("parentInvoiceId")).to.be.a("string");
+      expect(bru.getEnvVar("cashInvoiceId")).to.be.a("string");
+      expect(bru.getEnvVar("parentInvoiceId")).to.not.equal(bru.getEnvVar("cashInvoiceId"));
+      expect(Number(bru.getEnvVar("parentInvoiceTotal"))).to.be.at.least(55000);
+    }
+  });
+}

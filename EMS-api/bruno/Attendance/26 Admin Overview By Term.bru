@@ -1,0 +1,38 @@
+meta {
+  name: 26 Admin Overview By Term
+  type: http
+  seq: 26
+  tags: [
+    attendance
+    smoke
+    phase3
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/admin/overview/?term={{termId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.mode: eq term
+}
+
+tests {
+  test("admin term overview lists class scopes and mark activity", function () {
+    const body = res.getBody();
+    expect(body.mode).to.equal("term");
+    expect(body.term_id).to.equal(bru.getEnvVar("termId"));
+    expect(body.total_school_days).to.equal(60);
+    expect(body.classes).to.be.an("array");
+    expect(body.classes.length).to.be.at.least(1);
+  });
+}

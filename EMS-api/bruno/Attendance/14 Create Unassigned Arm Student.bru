@@ -1,0 +1,57 @@
+meta {
+  name: 14 Create Unassigned Arm Student
+  type: http
+  seq: 14
+  tags: [
+    attendance
+    smoke
+    phase3
+    rbac
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/students/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "first_name": "Bola",
+    "last_name": "OtherArm",
+    "date_of_birth": "2014-05-10",
+    "gender": "female",
+    "admission_number": "{{unassignedArmAdmissionNumber}}",
+    "admission_date": "2026-09-01",
+    "guardian": {
+      "full_name": "Other Arm Guardian",
+      "phone_number": "+2348088877766",
+      "relationship_to_student": "mother",
+      "is_primary_contact": true
+    }
+  }
+}
+
+script:pre-request {
+  const stamp = Date.now().toString(36).toUpperCase();
+  bru.setEnvVar("unassignedArmAdmissionNumber", `ADM-ARM-${stamp}`);
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("unassignedArmStudentId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+}

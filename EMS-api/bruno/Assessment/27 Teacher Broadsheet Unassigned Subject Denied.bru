@@ -1,0 +1,35 @@
+meta {
+  name: 27 Teacher Broadsheet Unassigned Subject Denied
+  type: http
+  seq: 27
+  tags: [
+    assessment
+    smoke
+    phase2
+    rbac
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/broadsheet/?class_level={{classLevelId}}&arm={{armId}}&term={{termId}}&subject={{unassignedSubjectId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{teacherAccessToken}}
+}
+
+assert {
+  res.status: eq 400
+}
+
+tests {
+  test("teacher cannot view broadsheet for unassigned subject", function () {
+    expect(res.getStatus()).to.equal(400);
+    const blob = JSON.stringify(res.getBody());
+    expect(blob).to.match(/not assigned|subject/i);
+  });
+}

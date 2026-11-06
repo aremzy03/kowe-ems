@@ -1,0 +1,49 @@
+meta {
+  name: 04 Create Fee Structure PTA
+  type: http
+  seq: 4
+  tags: [
+    finance
+    smoke
+    phase4
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/finance/fee-structures/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "class_level": "{{classLevelId}}",
+    "term": "{{termId}}",
+    "name": "{{ptaFeeName}}",
+    "amount": "5000.00"
+  }
+}
+
+script:pre-request {
+  const stamp = Date.now().toString(36);
+  bru.setEnvVar("ptaFeeName", `PTA-Bruno-${stamp}`);
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("ptaFeeId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.amount: eq "5000.00"
+}

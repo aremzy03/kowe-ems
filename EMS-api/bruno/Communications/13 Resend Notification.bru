@@ -1,0 +1,59 @@
+meta {
+  name: 13 Resend Notification
+  type: http
+  seq: 13
+  tags: [
+    communications
+    smoke
+    phase5
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/communications/notifications/{{resendTargetId}}/resend/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+tests {
+  test("resend re-queues a failed row or rejects a row that is not failed", function () {
+    const mode = bru.getEnvVar("resendExpectStatus");
+    const body = res.getBody();
+    if (mode === "200") {
+      expect(res.getStatus()).to.equal(200);
+      expect(body.id).to.equal(bru.getEnvVar("resendTargetId"));
+      expect(body.id).to.equal(bru.getEnvVar("failedNotificationId"));
+      expect(
+        body.status === "queued" || body.status === "sent" || body.status === "failed"
+      ).to.equal(true);
+      expect(body.channel).to.equal(bru.getEnvVar("resendChannel"));
+      expect(body.trigger_type).to.equal(bru.getEnvVar("resendTriggerType"));
+      expect(String(body.related_object_id)).to.equal(
+        String(bru.getEnvVar("resendRelatedObjectId"))
+      );
+      if (body.status === "queued") {
+        expect(body.error_message).to.equal(null);
+        expect(body.sent_at).to.equal(null);
+      }
+      return;
+    }
+    expect(res.getStatus()).to.equal(400);
+    expect(body.detail).to.equal("Only failed notifications can be resent.");
+  });
+}
+
+docs {
+  Resend does not insert a second NotificationLog. It sets the same failed
+  row back to queued, clears error_message and sent_at, and publishes
+  send_notification after commit. Sent or queued rows return 400.
+  Default local run (no worker) hits that 400 with the invoice email id.
+  A 200 means request 12 found a failed row from this run. A fast worker
+  may move the re-queued row to sent or failed again before this response
+  is read; those statuses are accepted. Do not require status=sent.
+}

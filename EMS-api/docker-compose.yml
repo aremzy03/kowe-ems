@@ -1,0 +1,79 @@
+# Local development stack. Secrets and DB_* come from .env — nothing hardcoded.
+#
+# Host port 5432 is often occupied; this repo already uses DB_PORT=5433.
+# Compose maps ${DB_PORT:-5433}:5432 so it stays aligned with .env.
+#
+# If a standalone container named ems-postgres is already bound to 5433,
+# do not start the `db` service (or stop that container first):
+#   docker compose up web redis worker
+# Host-run Django (.venv + manage.py) should keep DB_HOST=localhost.
+# `worker` consumes Celery tasks (communications.send_notification). It
+# does not send inside the web request.
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - ems_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_NAME}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  web:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.local
+      # Inside the compose network, talk to service names (not localhost from .env).
+      DB_HOST: db
+      DB_PORT: '5432'
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    command: python manage.py runserver 0.0.0.0:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.local
+      DB_HOST: db
+      DB_PORT: '5432'
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    command: celery -A config worker --loglevel=info
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+volumes:
+  ems_pgdata:

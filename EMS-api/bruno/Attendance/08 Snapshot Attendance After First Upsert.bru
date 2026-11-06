@@ -1,0 +1,41 @@
+meta {
+  name: 08 Snapshot Attendance After First Upsert
+  type: http
+  seq: 8
+  tags: [
+    attendance
+    smoke
+    phase3
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/daily/?student={{studentId}}&date={{attendanceDate}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const rows = Array.isArray(body) ? body : body.results || [];
+    bru.setEnvVar("attendanceCountAfterFirst", String(rows.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("first upsert yields exactly one DailyAttendance row for student+date", function () {
+    expect(Number(bru.getEnvVar("attendanceCountAfterFirst"))).to.equal(1);
+  });
+}

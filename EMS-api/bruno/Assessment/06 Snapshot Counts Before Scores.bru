@@ -1,0 +1,35 @@
+meta {
+  name: 06 Snapshot Counts Before Scores
+  type: http
+  seq: 6
+  tags: [
+    assessment
+    smoke
+    phase2
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/assessment/scores/
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const scores = Array.isArray(body) ? body : body.results || [];
+    bru.setEnvVar("scoreCountBefore", String(scores.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}

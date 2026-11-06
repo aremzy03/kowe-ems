@@ -1,0 +1,35 @@
+meta {
+  name: 06 Snapshot Attendance Audit Before
+  type: http
+  seq: 6
+  tags: [
+    attendance
+    smoke
+    phase3
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/audit-logs/?student={{studentId}}&date={{attendanceDate}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const logs = Array.isArray(body) ? body : body.results || [];
+    bru.setEnvVar("attendanceAuditCountBefore", String(logs.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}

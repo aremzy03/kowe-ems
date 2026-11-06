@@ -1,0 +1,40 @@
+meta {
+  name: 10 Refresh Access Token
+  type: http
+  seq: 10
+  tags: [
+    auth
+    smoke
+    phase1
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/auth/refresh/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  X-CSRFToken: {{csrfToken}}
+}
+
+body:json {
+  {}
+}
+
+script:post-response {
+  // Cookie jar holds refresh_token from bursar enroll-confirm.
+  // Admin Bearer {{accessToken}} from earlier steps remains for Academics.
+  if (res.status === 200 && res.body && res.body.access) {
+    bru.setEnvVar("refreshedAccessToken", res.body.access);
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.access: isDefined
+}

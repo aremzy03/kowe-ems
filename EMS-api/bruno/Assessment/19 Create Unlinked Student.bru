@@ -1,0 +1,57 @@
+meta {
+  name: 19 Create Unlinked Student
+  type: http
+  seq: 19
+  tags: [
+    assessment
+    smoke
+    phase2
+    rbac
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/students/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "first_name": "Chidi",
+    "last_name": "Unlinked",
+    "date_of_birth": "2014-07-22",
+    "gender": "male",
+    "admission_number": "{{unlinkedAdmissionNumber}}",
+    "admission_date": "2026-09-01",
+    "guardian": {
+      "full_name": "Other Guardian",
+      "phone_number": "+2348099988877",
+      "relationship_to_student": "father",
+      "is_primary_contact": true
+    }
+  }
+}
+
+script:pre-request {
+  const stamp = Date.now().toString(36).toUpperCase();
+  bru.setEnvVar("unlinkedAdmissionNumber", `ADM-UNL-${stamp}`);
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("unlinkedStudentId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+}

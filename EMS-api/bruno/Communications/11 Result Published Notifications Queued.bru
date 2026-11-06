@@ -1,0 +1,80 @@
+meta {
+  name: 11 Result Published Notifications Queued
+  type: http
+  seq: 11
+  tags: [
+    communications
+    smoke
+    phase5
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/communications/notifications/?trigger_type=result_published
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (res.status === 200 && Array.isArray(body)) {
+    const summaryId = String(bru.getEnvVar("resultSummaryId"));
+    const mine = body.filter((row) => String(row.related_object_id) === summaryId);
+    const email = mine.find((row) => row.channel === "email");
+    const whatsapp = mine.find((row) => row.channel === "whatsapp");
+    if (email) bru.setEnvVar("resultEmailNotificationId", email.id);
+    if (whatsapp) bru.setEnvVar("resultWhatsappNotificationId", whatsapp.id);
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("publish queues email and WhatsApp once for the linked parent", function () {
+    const body = res.getBody();
+    expect(Array.isArray(body)).to.equal(true);
+    for (const row of body) {
+      expect(row.trigger_type).to.equal("result_published");
+    }
+    const summaryId = String(bru.getEnvVar("resultSummaryId"));
+    const parentEmail = String(bru.getEnvVar("parentEmail") || "").toLowerCase();
+    const mine = body.filter((row) => String(row.related_object_id) === summaryId);
+    const email = mine.filter((row) => row.channel === "email");
+    const whatsapp = mine.filter((row) => row.channel === "whatsapp");
+    expect(email.length).to.equal(1);
+    expect(whatsapp.length).to.equal(1);
+    expect(email[0].id).to.equal(bru.getEnvVar("resultEmailNotificationId"));
+    expect(whatsapp[0].id).to.equal(bru.getEnvVar("resultWhatsappNotificationId"));
+    expect(email[0].recipient_email.toLowerCase()).to.equal(parentEmail);
+    expect(whatsapp[0].recipient_email.toLowerCase()).to.equal(parentEmail);
+    expect(email[0].status === "queued" || email[0].status === "sent").to.equal(true);
+    expect(
+      whatsapp[0].status === "queued" ||
+        whatsapp[0].status === "sent" ||
+        whatsapp[0].status === "failed"
+    ).to.equal(true);
+    if (email[0].status === "queued") {
+      expect(email[0].sent_at).to.equal(null);
+    }
+    if (whatsapp[0].status === "queued") {
+      expect(whatsapp[0].sent_at).to.equal(null);
+      expect(whatsapp[0].error_message).to.equal(null);
+    }
+  });
+}
+
+docs {
+  Result publish always queues both channels. Invoice and payment queue
+  WhatsApp only when Guardian.phone_number is non-blank, so those two
+  triggers stay email-only for this parent. A blank number is marked
+  failed by the worker, not by this request. With no worker the WhatsApp
+  row stays queued. sent or failed is accepted when a worker is running.
+}

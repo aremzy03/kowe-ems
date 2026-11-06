@@ -1,0 +1,46 @@
+meta {
+  name: 04 Accept Staff Invite Teacher
+  type: http
+  seq: 4
+  tags: [
+    auth
+    smoke
+    phase1
+    invite
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/memberships/invites/accept/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "token": "{{inviteToken}}",
+    "password": "{{staffInvitePassword}}",
+    "first_name": "Bruno",
+    "last_name": "Teacher"
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body && res.body.user && res.body.user.id) {
+    bru.setEnvVar("teacherUserId", res.body.user.id);
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.detail: eq Invitation accepted.
+  res.body.created_user: eq true
+  res.body.membership.role: eq teacher
+  res.body.user.id: isDefined
+}

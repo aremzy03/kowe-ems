@@ -1,0 +1,57 @@
+meta {
+  name: 21 Create Unlinked Student For Attendance
+  type: http
+  seq: 21
+  tags: [
+    attendance
+    smoke
+    phase3
+    rbac
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/academics/students/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "first_name": "Emeka",
+    "last_name": "NoLink",
+    "date_of_birth": "2014-11-02",
+    "gender": "male",
+    "admission_number": "{{attendanceUnlinkedAdmissionNumber}}",
+    "admission_date": "2026-09-01",
+    "guardian": {
+      "full_name": "No Link Guardian",
+      "phone_number": "+2348077766655",
+      "relationship_to_student": "father",
+      "is_primary_contact": true
+    }
+  }
+}
+
+script:pre-request {
+  const stamp = Date.now().toString(36).toUpperCase();
+  bru.setEnvVar("attendanceUnlinkedAdmissionNumber", `ADM-ATL-${stamp}`);
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setEnvVar("attendanceUnlinkedStudentId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+}

@@ -1,0 +1,63 @@
+meta {
+  name: 10 Parent Initialize Payment
+  type: http
+  seq: 10
+  tags: [
+    finance
+    smoke
+    phase4
+    paystack
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/finance/payments/initialize/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{parentAccessToken}}
+}
+
+body:json {
+  {
+    "invoice": "{{parentInvoiceId}}"
+  }
+}
+
+script:post-response {
+  const body = res.getBody() || {};
+  if (res.status === 201) {
+    bru.setEnvVar("paymentReference", body.reference);
+    bru.setEnvVar("paymentId", body.payment_id);
+    bru.setEnvVar("authorizationUrl", body.authorization_url);
+    bru.setEnvVar("invoiceStatusAfterInit", body.invoice_status);
+    bru.setEnvVar("paymentStatusAfterInit", body.payment_status);
+    const naira = Number(body.amount);
+    bru.setEnvVar("paymentAmountKobo", String(Math.round(naira * 100)));
+    bru.setEnvVar("paymentAmountNaira", String(body.amount));
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+tests {
+  test("checkout URL returned; invoice and payment stay unpaid/pending", function () {
+    const body = res.getBody();
+    expect(body.authorization_url).to.be.a("string");
+    expect(body.authorization_url).to.match(/^https:\/\//);
+    expect(body.reference).to.match(/^pay_/);
+    expect(body.payment_status).to.equal("pending");
+    expect(body.invoice_status).to.equal("unpaid");
+    expect(body.amount).to.equal(bru.getEnvVar("parentInvoiceTotal"));
+    expect(Number(bru.getEnvVar("paymentAmountKobo"))).to.equal(
+      Math.round(Number(body.amount) * 100)
+    );
+  });
+}

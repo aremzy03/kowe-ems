@@ -1,0 +1,42 @@
+meta {
+  name: 02 Parent Login
+  type: http
+  seq: 2
+  tags: [
+    parents
+    smoke
+    phase1
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/auth/login/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "email": "{{parentEmail}}",
+    "password": "{{parentPassword}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body && res.body.access) {
+    bru.setEnvVar("parentAccessToken", res.body.access);
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.requires_2fa: eq false
+  res.body.role: eq parent
+  res.body.access: isDefined
+}

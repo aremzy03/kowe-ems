@@ -1,0 +1,58 @@
+meta {
+  name: 03 Create Staff Invite Teacher
+  type: http
+  seq: 3
+  tags: [
+    auth
+    smoke
+    phase1
+    invite
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/memberships/invites/
+  body: json
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Content-Type: application/json
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "email": "{{staffInviteEmail}}",
+    "role": "teacher"
+  }
+}
+
+script:pre-request {
+  const stamp = Date.now().toString(36);
+  const email =
+    process.env.STAFF_INVITE_EMAIL || `teacher.bruno.${stamp}@example.com`;
+  bru.setEnvVar("staffInviteEmail", email);
+}
+
+script:post-response {
+  if (res.status === 201 && res.body) {
+    if (res.body.accept_url) {
+      bru.setEnvVar("inviteAcceptUrl", res.body.accept_url);
+      const m = String(res.body.accept_url).match(/[?&]token=([^&]+)/);
+      if (m) {
+        bru.setEnvVar("inviteToken", decodeURIComponent(m[1]));
+      }
+    }
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.email: isDefined
+  res.body.role: eq teacher
+  res.body.status: eq pending
+  res.body.accept_url: isDefined
+}

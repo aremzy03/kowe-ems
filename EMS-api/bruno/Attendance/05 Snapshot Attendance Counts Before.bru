@@ -1,0 +1,41 @@
+meta {
+  name: 05 Snapshot Attendance Counts Before
+  type: http
+  seq: 5
+  tags: [
+    attendance
+    smoke
+    phase3
+    idempotency
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/attendance/daily/?student={{studentId}}&date={{attendanceDate}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Tenant-Slug: {{tenantSlug}}
+  Accept: application/json
+  Authorization: Bearer {{accessToken}}
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("attendanceDate")) {
+    bru.setEnvVar("attendanceDate", "2026-09-15");
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const body = res.getBody();
+    const rows = Array.isArray(body) ? body : body.results || [];
+    bru.setEnvVar("attendanceCountBefore", String(rows.length));
+  }
+}
+
+assert {
+  res.status: eq 200
+}
