@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paper Brutalism — flat paper field, neo-brutalist punctuation */
+
+  --color-ink: #211f26;
+  --color-paper: #fbf6ec;
+  --color-paper-tint: #f3ebda;
+  --color-paper-card: #fffffb;
+
+  --color-accent-1: #5b3de8;
+  --color-accent-2: #ff7a45;
+  --color-success: #1c9c7c;
+  --color-warning: #f5a623;
+  --color-danger: #e14b4b;
+
+  --shadow-nb-sm: 2px 2px 0 0 var(--color-ink);
+  --shadow-nb: 4px 4px 0 0 var(--color-ink);
+  --shadow-nb-lg: 7px 7px 0 0 var(--color-ink);
+  --shadow-nb-xl: 10px 10px 0 0 var(--color-ink);
+
+  --radius-nb-sm: 4px;
+  --radius-nb: 6px;
+  --radius-nb-lg: 8px;
+
+  --font-heading: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-accent: "Kalam", cursive;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    line-height: 1.55;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-heading);
+  }
+}
+
+@layer utilities {
+  .nb-interactive {
+    transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .nb-interactive:hover {
+    transform: translate(-2px, -2px);
+  }
+  .nb-interactive:active {
+    transform: translate(2px, 2px);
+    box-shadow: none !important;
+  }
+  .nb-interactive:focus-visible {
+    outline: 3px solid var(--color-accent-1);
+    outline-offset: 3px;
+  }
+}
