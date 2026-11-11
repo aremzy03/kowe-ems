@@ -267,8 +267,28 @@ class SchoolPaymentAccountOnboardingTests(TenantTestCase):
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
         self.assertEqual(SchoolPaymentAccount.objects.count(), 0)
 
-    def test_bursar_cannot_onboard(self):
+    def test_bursar_can_onboard(self):
         self.api.force_authenticate(user=self.bursar)
+        with mock.patch(
+            'finance.paystack.requests.request',
+            side_effect=[_response(RESOLVE_OK), _response(SUBACCOUNT_OK, 201)],
+        ):
+            response = self._post()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(SchoolPaymentAccount.objects.get().created_by, self.bursar)
+        self.assertEqual(response.data['account_number'], '****0000')
+
+    def test_teacher_cannot_onboard(self):
+        teacher = User.objects.create_user(
+            email='teacher-fin@example.com',
+            password='pass12345',
+        )
+        SchoolMembership.objects.create(
+            user=teacher,
+            role=SchoolMembership.Role.TEACHER,
+            is_active=True,
+        )
+        self.api.force_authenticate(user=teacher)
         with mock.patch('finance.paystack.requests.request') as http:
             response = self._post()
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -539,6 +559,33 @@ class FeeStructureCrudTests(FinanceInvoicingTestCase):
         response = self.api.delete(f'{FEES_URL}{fees[0].id}/')
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
+    def test_schoolwide_fee_has_no_class_level(self):
+        self.api.force_authenticate(user=self.bursar)
+        created = self.api.post(
+            FEES_URL,
+            {
+                'class_level': None,
+                'term': str(self.term.id),
+                'name': 'School Bus',
+                'amount': '8000.00',
+            },
+            format='json',
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        self.assertIsNone(created.data['class_level'])
+        self.assertIsNone(created.data['class_level_name'])
+
+        duplicate = self.api.post(
+            FEES_URL,
+            {
+                'term': str(self.term.id),
+                'name': 'School Bus',
+                'amount': '9000.00',
+            },
+            format='json',
+        )
+        self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 class InvoiceGenerationTests(FinanceInvoicingTestCase):
     def test_generates_itemized_invoices_for_whole_class(self):
@@ -632,6 +679,186 @@ class InvoiceGenerationTests(FinanceInvoicingTestCase):
         response = self._generate(self.admin)
         self.assertEqual(response.data['created_count'], 2)
         self.assertFalse(Invoice.objects.filter(student=withdrawn).exists())
+
+    def test_schoolwide_fee_is_its_own_invoice_in_every_class(self):
+        from datetime import date
+
+        from academics.models import Arm, Enrollment, Student
+        from finance.models import FeeStructure, Invoice, InvoiceLineItem
+
+        self._make_fees()
+        FeeStructure.objects.create(
+            class_level=None,
+            term=self.term,
+            name='School Bus',
+            amount=Decimal('8000.00'),
+        )
+        jss2_arm = Arm.objects.create(class_level=self.other_class_level, name='A')
+        jss2_student = Student.objects.create(
+            first_name='Jss2',
+            last_name='Pupil',
+            date_of_birth=date(2014, 3, 1),
+            gender=Student.Gender.FEMALE,
+            admission_number='ADM-JSS2',
+            admission_date=date(2026, 9, 1),
+        )
+        Enrollment.objects.create(
+            student=jss2_student,
+            class_level=self.other_class_level,
+            arm=jss2_arm,
+            session=self.session,
+            term=self.term,
+            status=Enrollment.Status.ACTIVE,
+        )
+
+        first = self._generate(self.admin)
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+        # Three JSS1 students: one class invoice plus one bus invoice each.
+        self.assertEqual(first.data['created_count'], 6)
+
+        bus_invoices = Invoice.objects.filter(
+            line_items__fee_structure__name='School Bus'
+        )
+        self.assertEqual(bus_invoices.count(), 3)
+        for invoice in bus_invoices:
+            self.assertEqual(invoice.total_amount, Decimal('8000.00'))
+            self.assertEqual(invoice.line_items.count(), 1)
+
+        class_invoices = Invoice.objects.filter(
+            line_items__fee_structure__name='Tuition'
+        )
+        self.assertEqual(class_invoices.count(), 3)
+        self.assertTrue(
+            all(invoice.total_amount == Decimal('157500.50') for invoice in class_invoices)
+        )
+
+        second = self._generate(
+            self.bursar, class_level=str(self.other_class_level.id)
+        )
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED, second.data)
+        self.assertEqual(second.data['created_count'], 1)
+        self.assertEqual(
+            InvoiceLineItem.objects.filter(
+                fee_structure__name='School Bus',
+                invoice__student=jss2_student,
+            ).count(),
+            1,
+        )
+        self.assertFalse(
+            InvoiceLineItem.objects.filter(
+                invoice__student=jss2_student,
+                fee_structure__name='Tuition',
+            ).exists()
+        )
+
+        rerun = self._generate(self.admin)
+        self.assertEqual(rerun.status_code, status.HTTP_200_OK)
+        self.assertEqual(rerun.data['created_count'], 0)
+        self.assertEqual(rerun.data['skipped_count'], 3)
+
+    def test_all_classes_bills_each_class_once_including_schoolwide(self):
+        from datetime import date
+
+        from academics.models import Arm, Enrollment, Student
+        from finance.models import FeeStructure, Invoice, InvoiceLineItem
+
+        self._make_fees()
+        FeeStructure.objects.create(
+            class_level=self.other_class_level,
+            term=self.term,
+            name='Tuition',
+            amount=Decimal('1000.00'),
+        )
+        FeeStructure.objects.create(
+            class_level=None,
+            term=self.term,
+            name='School Bus',
+            amount=Decimal('8000.00'),
+        )
+        jss2_arm = Arm.objects.create(class_level=self.other_class_level, name='A')
+        jss2_student = Student.objects.create(
+            first_name='Jss2',
+            last_name='Pupil',
+            date_of_birth=date(2014, 3, 1),
+            gender=Student.Gender.FEMALE,
+            admission_number='ADM-JSS2',
+            admission_date=date(2026, 9, 1),
+        )
+        Enrollment.objects.create(
+            student=jss2_student,
+            class_level=self.other_class_level,
+            arm=jss2_arm,
+            session=self.session,
+            term=self.term,
+            status=Enrollment.Status.ACTIVE,
+        )
+
+        response = self._generate(self.admin, class_level=None)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        # JSS1: class invoice + bus for 3 students. JSS2: tuition + bus for 1.
+        self.assertEqual(response.data['created_count'], 8)
+        self.assertEqual(response.data['skipped_count'], 0)
+        self.assertEqual(
+            InvoiceLineItem.objects.filter(fee_structure__name='School Bus').count(),
+            4,
+        )
+        self.assertEqual(
+            Invoice.objects.filter(
+                student=jss2_student,
+                line_items__fee_structure__name='Tuition',
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            Invoice.objects.get(
+                student=jss2_student,
+                line_items__fee_structure__name='Tuition',
+            ).total_amount,
+            Decimal('1000.00'),
+        )
+
+        rerun = self._generate(self.bursar, class_level=None)
+        self.assertEqual(rerun.status_code, status.HTTP_200_OK)
+        self.assertEqual(rerun.data['created_count'], 0)
+        self.assertEqual(rerun.data['skipped_count'], 4)
+        self.assertEqual(Invoice.objects.count(), 8)
+
+    def test_all_classes_skips_a_class_with_nothing_to_bill(self):
+        from datetime import date
+
+        from academics.models import Arm, Enrollment, Student
+        from finance.models import Invoice
+
+        self._make_fees()
+        jss2_arm = Arm.objects.create(class_level=self.other_class_level, name='A')
+        jss2_student = Student.objects.create(
+            first_name='Jss2',
+            last_name='Pupil',
+            date_of_birth=date(2014, 3, 1),
+            gender=Student.Gender.FEMALE,
+            admission_number='ADM-JSS2',
+            admission_date=date(2026, 9, 1),
+        )
+        Enrollment.objects.create(
+            student=jss2_student,
+            class_level=self.other_class_level,
+            arm=jss2_arm,
+            session=self.session,
+            term=self.term,
+            status=Enrollment.Status.ACTIVE,
+        )
+
+        response = self._generate(self.admin, class_level=None)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['created_count'], 3)
+        self.assertFalse(Invoice.objects.filter(student=jss2_student).exists())
+
+    def test_all_classes_with_no_fees_is_a_400(self):
+        from finance.models import Invoice
+
+        response = self._generate(self.admin, class_level=None)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Invoice.objects.count(), 0)
 
     def test_no_fee_structures_is_a_400_and_creates_nothing(self):
         from finance.models import Invoice
@@ -1493,6 +1720,145 @@ class InitializePaymentTests(FinanceInvoicingTestCase):
         )
         self.assertEqual(Payment.objects.filter(status=Payment.Status.PENDING).count(), 1)
 
+    def test_unlinked_invoice_in_a_bundle_is_404_and_creates_nothing(self):
+        from finance.models import Payment, PaymentCheckout
+
+        self._activate_paystack()
+        self.api.force_authenticate(user=self.parent)
+        with mock.patch('finance.paystack.requests.request') as http:
+            response = self.api.post(
+                INIT_URL,
+                {
+                    'invoices': [
+                        str(self.invoice.id),
+                        str(self.other_invoice.id),
+                    ]
+                },
+                format='json',
+            )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        http.assert_not_called()
+        self.assertEqual(Payment.objects.count(), 0)
+        self.assertEqual(PaymentCheckout.objects.count(), 0)
+
+    def test_two_students_pay_in_one_paystack_charge(self):
+        from academics.models import Guardian, StudentGuardianLink
+        from finance.models import Invoice, Payment, PaymentCheckout
+        from finance.paystack import naira_to_kobo
+        from finance.services import verify_and_apply_payment
+
+        guardian = Guardian.objects.get(user=self.parent)
+        StudentGuardianLink.objects.create(
+            student=self.students[1],
+            guardian=guardian,
+            is_primary_contact=False,
+        )
+        self._activate_paystack()
+        self.api.force_authenticate(user=self.parent)
+        with mock.patch(
+            'finance.paystack.requests.request',
+            return_value=_response(INIT_OK),
+        ) as http:
+            response = self.api.post(
+                INIT_URL,
+                {
+                    'invoices': [
+                        str(self.invoice.id),
+                        str(self.other_invoice.id),
+                    ]
+                },
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['amount'], '315001.00')
+        self.assertEqual(response.data['payment_status'], 'pending')
+        sent = http.call_args.kwargs['json']
+        checkout = PaymentCheckout.objects.get()
+        self.assertEqual(sent['reference'], checkout.reference)
+        self.assertEqual(sent['amount'], naira_to_kobo(Decimal('315001.00')))
+        self.assertEqual(checkout.amount, Decimal('315001.00'))
+        self.assertEqual(Payment.objects.filter(checkout=checkout).count(), 2)
+        self.invoice.refresh_from_db()
+        self.other_invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, Invoice.Status.UNPAID)
+        self.assertEqual(self.other_invoice.status, Invoice.Status.UNPAID)
+
+        with mock.patch(
+            'finance.paystack.requests.request',
+            return_value=_response(
+                _verify_payload(checkout.reference, checkout.amount)
+            ),
+        ):
+            verify_and_apply_payment(checkout.reference)
+        self.invoice.refresh_from_db()
+        self.other_invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, Invoice.Status.PAID)
+        self.assertEqual(self.other_invoice.status, Invoice.Status.PAID)
+        self.assertEqual(
+            Payment.objects.filter(status=Payment.Status.SUCCESS).count(), 2
+        )
+
+        with mock.patch('finance.paystack.requests.request') as http:
+            verify_and_apply_payment(checkout.reference)
+        http.assert_not_called()
+        logs = _platform_txn_logs(self.tenant)
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(logs[0].payment_reference, checkout.reference)
+        self.assertEqual(logs[0].gross_amount, Decimal('315001.00'))
+
+    def test_one_student_two_terms_pay_together(self):
+        from datetime import date
+
+        from academics.models import Enrollment, Term
+        from finance.models import FeeStructure, Invoice, PaymentCheckout
+
+        second_term = Term.objects.create(
+            session=self.session,
+            name=Term.Name.SECOND,
+            start_date=date(2027, 1, 11),
+            end_date=date(2027, 4, 2),
+            is_active=False,
+        )
+        Enrollment.objects.create(
+            student=self.students[0],
+            class_level=self.class_level,
+            arm=self.arm,
+            session=self.session,
+            term=second_term,
+            status=Enrollment.Status.ACTIVE,
+        )
+        FeeStructure.objects.create(
+            class_level=self.class_level,
+            term=second_term,
+            name='Tuition',
+            amount=Decimal('1000.00'),
+        )
+        generated = self._generate(
+            self.admin,
+            term=str(second_term.id),
+        )
+        self.assertEqual(generated.status_code, status.HTTP_201_CREATED, generated.data)
+        second_invoice = Invoice.objects.get(student=self.students[0], term=second_term)
+
+        self._activate_paystack()
+        self.api.force_authenticate(user=self.parent)
+        with mock.patch(
+            'finance.paystack.requests.request',
+            return_value=_response(INIT_OK),
+        ) as http:
+            response = self.api.post(
+                INIT_URL,
+                {'invoices': [str(self.invoice.id), str(second_invoice.id)]},
+                format='json',
+            )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['amount'], '158500.50')
+        sent = http.call_args.kwargs['json']
+        checkout = PaymentCheckout.objects.get()
+        self.assertEqual(sent['reference'], checkout.reference)
+        self.assertEqual(sent['amount'], 15850050)
+
 
 # ---------------------------------------------------------------------------
 # Server-side verification (Prompt 4)
@@ -1781,7 +2147,9 @@ class VerifyAndApplyPaymentTests(FinanceInvoicingTestCase):
         apply_fns = [
             name
             for name in dir(services)
-            if 'apply' in name.lower() and callable(getattr(services, name))
+            if 'apply' in name.lower()
+            and not name.startswith('_')
+            and callable(getattr(services, name))
         ]
         self.assertEqual(apply_fns, ['verify_and_apply_payment'])
 

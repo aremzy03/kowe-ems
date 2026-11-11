@@ -5,6 +5,7 @@ from finance.models import (
     Invoice,
     InvoiceLineItem,
     Payment,
+    PaymentCheckout,
     SchoolPaymentAccount,
 )
 
@@ -70,6 +71,15 @@ class InvoiceLineItemAdmin(admin.ModelAdmin):
         'invoice__student__first_name',
     )
     raw_id_fields = ('invoice', 'fee_structure')
+
+
+@admin.register(PaymentCheckout)
+class PaymentCheckoutAdmin(admin.ModelAdmin):
+    list_display = ('reference', 'amount', 'status', 'paid_at', 'created_at')
+    list_filter = ('status',)
+    search_fields = ('reference',)
+    raw_id_fields = ('initiated_by',)
+    readonly_fields = ('reference', 'amount', 'paid_at', 'created_at')
 
 
 @admin.register(Payment)

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
   AttendanceOverview,
@@ -11,8 +12,8 @@ import {
   collectionsPencilNote,
   type CollectionsDashboardData,
 } from "@/components/finance/CollectionsDashboard";
-import { EmptyState, PageHeader, PencilAside } from "@/components/ui";
-import { academicsApi } from "@/lib/api/academics";
+import { Button, EmptyState, PageHeader, PencilAside } from "@/components/ui";
+import { academicsApi, currentTerm } from "@/lib/api/academics";
 import { financeApi } from "@/lib/api/finance";
 import { attendanceApi } from "@/lib/api/attendance";
 import { useAppSession } from "@/lib/auth/use-app-session";
@@ -23,7 +24,8 @@ export default function AdminHomePage() {
     queryKey: ["academics", "terms"],
     queryFn: () => academicsApi.terms.list(),
   });
-  const termId = terms.data?.[0]?.id;
+  const termId = currentTerm(terms.data)?.id;
+  const hasTerms = (terms.data?.length ?? 0) > 0;
   const collections = useQuery({
     queryKey: ["finance", "collections", termId],
     queryFn: () =>
@@ -47,12 +49,23 @@ export default function AdminHomePage() {
       <PageHeader
         title={`Welcome, ${displayName}`}
         description="School operations overview"
+        actions={
+          <Link href="/admin/payment-account">
+            <Button variant="secondary" size="sm">
+              Payment account
+            </Button>
+          </Link>
+        }
       />
 
       {!termId && !terms.isLoading ? (
         <EmptyState
-          headline="No terms yet"
-          body="Create an academic term to see collections and attendance."
+          headline={hasTerms ? "No current term" : "No terms yet"}
+          body={
+            hasTerms
+              ? "Set the current term in Academics. Collections and attendance here use that term."
+              : "Create an academic term to see collections and attendance."
+          }
         />
       ) : (
         <>

@@ -20,6 +20,8 @@ type GenerateResult = {
   invoices?: { term_name?: string; session_name?: string; term?: string }[];
 };
 
+const ALL_CLASSES = "all";
+
 function termOptionLabel(term: Term, sessions: Session[]) {
   const session =
     term.session_name ||
@@ -52,11 +54,13 @@ export default function GenerateInvoicesPage() {
   });
 
   const classOptions: EntitySearchOption[] = useMemo(
-    () =>
-      (classLevels.data ?? []).map((level) => ({
+    () => [
+      { id: ALL_CLASSES, label: "All classes" },
+      ...(classLevels.data ?? []).map((level) => ({
         id: level.id,
         label: level.name,
       })),
+    ],
     [classLevels.data],
   );
 
@@ -82,12 +86,14 @@ export default function GenerateInvoicesPage() {
     [arms.data, classLevel],
   );
 
+  const allClasses = classLevel === ALL_CLASSES;
+
   const generate = useMutation({
     mutationFn: () =>
       financeApi.generateInvoices({
-        class_level: classLevel,
         term,
-        ...(arm ? { arm } : {}),
+        ...(allClasses ? {} : { class_level: classLevel }),
+        ...(arm && !allClasses ? { arm } : {}),
       }) as Promise<GenerateResult>,
     onSuccess: (data) => {
       setResult(data ?? {});
@@ -115,7 +121,7 @@ export default function GenerateInvoicesPage() {
     <div className="mx-auto max-w-lg space-y-6">
       <PageHeader
         title="Generate invoices"
-        description="Create invoices for a class/term (idempotent)"
+        description="Create invoices for one class, or every class, in a term"
       />
       <Card>
         <CardBody className="space-y-3">
@@ -130,7 +136,7 @@ export default function GenerateInvoicesPage() {
               }}
               options={classOptions}
               loading={classLevels.isLoading}
-              placeholder="Search class level…"
+              placeholder="Search class level, or all classes…"
               emptyMessage="No class levels found"
             />
           </div>
@@ -154,9 +160,13 @@ export default function GenerateInvoicesPage() {
               onChange={setArm}
               options={armOptions}
               loading={arms.isLoading}
-              disabled={!classLevel}
+              disabled={!classLevel || allClasses}
               placeholder={
-                classLevel ? "Search arm…" : "Choose a class level first"
+                allClasses
+                  ? "Not used when generating every class"
+                  : classLevel
+                    ? "Search arm…"
+                    : "Choose a class level first"
               }
               emptyMessage="No arms for this class"
             />
@@ -179,7 +189,7 @@ export default function GenerateInvoicesPage() {
                   : `Created ${created} invoice${created === 1 ? "" : "s"}`}
               </p>
               <p className="text-sm text-ink/75">
-                Term {termLabel}
+                {allClasses ? "Every class" : "Selected class"} · term {termLabel}
                 {skipped > 0
                   ? ` · ${skipped} student${skipped === 1 ? "" : "s"} already had an invoice and were skipped`
                   : null}

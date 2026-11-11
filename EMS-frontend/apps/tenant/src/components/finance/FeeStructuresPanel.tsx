@@ -82,7 +82,7 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
       financeApi.feeStructures.create({
         name: name.trim(),
         amount,
-        class_level: classLevel,
+        class_level: classLevel || null,
         term,
       }),
     onSuccess: () => {
@@ -102,7 +102,7 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
     setEditing(fs);
     setEditName(fs.name);
     setEditAmount(fs.amount);
-    setEditClassLevel(fs.class_level);
+    setEditClassLevel(fs.class_level ?? "");
     setEditTerm(fs.term);
     setEditError(null);
   }
@@ -117,7 +117,7 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
       financeApi.feeStructures.update(id, {
         name: editName.trim(),
         amount: editAmount,
-        class_level: editClassLevel,
+        class_level: editClassLevel || null,
         term: editTerm,
       }),
     onSuccess: () => {
@@ -144,11 +144,7 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
   });
 
   const canCreate =
-    Boolean(name.trim()) &&
-    Boolean(amount) &&
-    Boolean(classLevel) &&
-    Boolean(term) &&
-    !create.isPending;
+    Boolean(name.trim()) && Boolean(amount) && Boolean(term) && !create.isPending;
 
   const catalogsLoading =
     classLevels.isLoading || terms.isLoading || sessions.isLoading;
@@ -187,7 +183,7 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
             />
           </div>
           <div>
-            <Label htmlFor="fs-class">Class level</Label>
+            <Label htmlFor="fs-class">Applies to</Label>
             <Select
               id="fs-class"
               value={classLevel}
@@ -195,7 +191,7 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
               onChange={(e) => setClassLevel(e.target.value)}
             >
               <option value="">
-                {classLevels.isLoading ? "Loading…" : "Choose class"}
+                {classLevels.isLoading ? "Loading…" : "All classes"}
               </option>
               {(classLevels.data ?? []).map((level) => (
                 <option key={level.id} value={level.id}>
@@ -255,7 +251,7 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
                 {(list.data ?? []).map((fs) => (
                   <TR key={fs.id}>
                     <TD>{fs.name}</TD>
-                    <TD>{fs.class_level_name ?? "—"}</TD>
+                    <TD>{fs.class_level ? (fs.class_level_name ?? "—") : "All classes"}</TD>
                     <TD>
                       {[fs.session_name, fs.term_name]
                         .filter(Boolean)
@@ -305,10 +301,7 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
               size="sm"
               disabled={
                 update.isPending ||
-                !editName.trim() ||
-                !editAmount ||
-                !editClassLevel ||
-                !editTerm
+                !editName.trim() || !editAmount || !editTerm
               }
               onClick={() => {
                 if (editing) update.mutate(editing.id);
@@ -339,13 +332,13 @@ export function FeeStructuresPanel({ showHeading = true }: FeeStructuresPanelPro
             />
           </div>
           <div>
-            <Label htmlFor="edit-fs-class">Class level</Label>
+            <Label htmlFor="edit-fs-class">Applies to</Label>
             <Select
               id="edit-fs-class"
               value={editClassLevel}
               onChange={(e) => setEditClassLevel(e.target.value)}
             >
-              <option value="">Choose class</option>
+              <option value="">All classes</option>
               {(classLevels.data ?? []).map((level) => (
                 <option key={level.id} value={level.id}>
                   {level.name}

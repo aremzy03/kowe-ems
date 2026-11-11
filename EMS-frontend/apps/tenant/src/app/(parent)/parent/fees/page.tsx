@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Badge,
@@ -37,10 +38,28 @@ export default function ParentFeesPage() {
     queryKey: ["finance", "my-invoices"],
     queryFn: () => financeApi.myInvoices(),
   });
+  const [picked, setPicked] = useState<string[]>([]);
 
-  const filtered = selected
-    ? invoices.filter((inv) => !inv.student || inv.student === selected.id)
-    : invoices;
+  const openInvoices = useMemo(
+    () => invoices.filter((inv) => balanceOf(inv) > 0),
+    [invoices],
+  );
+  const selectedInvoices = openInvoices.filter((inv) => picked.includes(inv.id));
+  const selectedTotal = selectedInvoices.reduce(
+    (sum, inv) => sum + balanceOf(inv),
+    0,
+  );
+
+  function toggle(id: string) {
+    setPicked((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
+
+  const payHref =
+    selectedInvoices.length === 1
+      ? `/parent/fees/pay?invoice=${selectedInvoices[0].id}`
+      : `/parent/fees/pay?invoices=${selectedInvoices.map((inv) => inv.id).join(",")}`;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4">
@@ -48,8 +67,8 @@ export default function ParentFeesPage() {
         title="Fees"
         description={
           selected
-            ? `${selected.name} · invoices and balances`
-            : "Select a linked child to view fees"
+            ? `Invoices for your linked children. ${selected.name} is selected above.`
+            : "Invoices for your linked children. Select more than one to pay them together."
         }
       />
 
@@ -62,27 +81,55 @@ export default function ParentFeesPage() {
         </p>
       ) : null}
 
-      {!isLoading && filtered.length === 0 ? (
+      {selectedInvoices.length > 0 ? (
+        <Card>
+          <CardBody className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-ink/70">
+                {selectedInvoices.length === 1
+                  ? "1 invoice selected"
+                  : `${selectedInvoices.length} invoices selected`}
+              </p>
+              <p className="text-lg font-bold">
+                <Money amount={selectedTotal} />
+              </p>
+            </div>
+            <Link href={payHref}>
+              <Button size="sm">
+                {selectedInvoices.length > 1 ? "Pay together" : "Pay selected"}
+              </Button>
+            </Link>
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {!isLoading && invoices.length === 0 ? (
         <Card>
           <CardBody>
-            <p className="text-ink/75">No invoices for this child.</p>
+            <p className="text-ink/75">No invoices for your linked children.</p>
           </CardBody>
         </Card>
       ) : (
         <ul className="space-y-3">
-          {filtered.map((inv) => {
+          {invoices.map((inv) => {
             const balance = balanceOf(inv);
+            const chargeName = inv.line_items
+              ?.map((item) => item.name)
+              .filter(Boolean)
+              .join(", ");
             return (
               <li key={inv.id}>
                 <Card>
                   <CardBody className="space-y-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <p
-                          className="font-bold"
-                          style={{ fontFamily: "var(--font-mono)" }}
-                        >
-                          {inv.reference ?? inv.id}
+                        <p className="font-bold" style={{ fontFamily: "var(--font-heading)" }}>
+                          {inv.student_name ?? "Student"}
+                        </p>
+                        <p className="text-sm text-ink/70">
+                          {[inv.session_name, inv.term_name].filter(Boolean).join(" · ") ||
+                            "Invoice"}
+                          {chargeName ? ` · ${chargeName}` : ""}
                         </p>
                       </div>
                       <Badge variant={feeVariant(inv.status)}>
@@ -103,9 +150,14 @@ export default function ParentFeesPage() {
                         </p>
                       </div>
                       {balance > 0 ? (
-                        <Link href={`/parent/fees/pay?invoice=${inv.id}`}>
-                          <Button size="sm">Pay</Button>
-                        </Link>
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                          <input
+                            type="checkbox"
+                            checked={picked.includes(inv.id)}
+                            onChange={() => toggle(inv.id)}
+                          />
+                          Include
+                        </label>
                       ) : null}
                     </div>
                     {(inv.payments ?? []).length > 0 ? (

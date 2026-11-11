@@ -94,7 +94,7 @@ class StaffDirectoryAndInviteInboxTests(TenantTestCase):
         teacher_row = next(
             row for row in response.data if row['email'] == 'teacher-dir@example.com'
         )
-        self.assertEqual(teacher_row['user'], str(self.teacher.pk))
+        self.assertEqual(str(teacher_row['user']), str(self.teacher.pk))
         self.assertEqual(teacher_row['first_name'], 'Tunde')
         self.assertEqual(teacher_row['role'], SchoolMembership.Role.TEACHER)
         self.assertTrue(teacher_row['is_active'])

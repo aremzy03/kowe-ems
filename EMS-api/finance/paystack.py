@@ -280,7 +280,13 @@ def verify_transaction(reference):
             encoded,
         )
         payment = Payment.objects.filter(reference=reference).first()
-        amount_kobo = naira_to_kobo(payment.amount) if payment is not None else 0
+        if payment is not None:
+            amount_kobo = naira_to_kobo(payment.amount)
+        else:
+            from finance.models import PaymentCheckout
+
+            checkout = PaymentCheckout.objects.filter(reference=reference).first()
+            amount_kobo = naira_to_kobo(checkout.amount) if checkout is not None else 0
         return {
             'status': 'success',
             'amount': amount_kobo,

@@ -19,6 +19,7 @@ export const STAFF_NAV: Record<"admin" | "teacher" | "bursar", StaffNavItem[]> =
     { href: "/admin/attendance", label: "Attendance" },
     { href: "/admin/fees", label: "Fees" },
     { href: "/admin/fee-structures", label: "Fee structures" },
+    { href: "/admin/payment-account", label: "Payment account" },
   ],
   teacher: [
     { href: "/teacher", label: "Home" },

@@ -32,12 +32,13 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.timezone import is_naive, make_aware
 
-from academics.models import Enrollment
+from academics.models import ClassLevel, Enrollment
 from finance.models import (
     FeeStructure,
     Invoice,
     InvoiceLineItem,
     Payment,
+    PaymentCheckout,
     SchoolPaymentAccount,
 )
 from finance.paystack import (
@@ -169,21 +170,40 @@ def onboard_school_payment_account(
     return account
 
 
+def _invoice_for_fees(*, student_id, term, fees):
+    """Create one unpaid invoice whose line items snapshot ``fees``."""
+    total = sum((fee.amount for fee in fees), Decimal('0.00'))
+    invoice = Invoice.objects.create(
+        student_id=student_id,
+        term=term,
+        total_amount=total,
+        status=Invoice.Status.UNPAID,
+    )
+    InvoiceLineItem.objects.bulk_create(
+        InvoiceLineItem(invoice=invoice, fee_structure=fee, amount=fee.amount)
+        for fee in fees
+    )
+    return invoice
+
+
 @transaction.atomic
 def generate_invoices_for_class_term(*, class_level, term):
     """
-    Create one Invoice (+ itemized InvoiceLineItems) per actively-enrolled
-    student in ``class_level`` + ``term`` who does not already have an
-    invoice for that term.
+    Bill every actively-enrolled student in ``class_level`` + ``term``.
 
-    Idempotent by design: students with an existing invoice for the term are
-    skipped, never duplicated — so this can be safely re-run after adding
-    late enrollees. The DB unique constraint on (student, term) backstops
-    the application-level skip.
+    Class-level fees for that class and term become one itemized invoice.
+    Each school-wide fee (``class_level`` is null, same term) becomes its
+    own invoice, so a parent can pay tuition and a bus or uniform charge
+    separately or in one Paystack checkout.
 
-    Invoices are created with status='unpaid' and total_amount as the
-    Decimal sum of the class+term FeeStructure items; each line item
-    snapshots the fee amount at generation time.
+    Idempotent by fee, not by "any invoice exists": a fee already present
+    on a line item for that student and term is not billed again. Re-running
+    after a late enrollment bills only the new student; re-running after a
+    new fee bills only that fee. Enrollment rows are locked so two generates
+    cannot double-bill the same fee.
+
+    Invoices are created with status='unpaid'. Each line item snapshots the
+    fee amount at generation time.
 
     This function is one transaction. The invoice-generated receiver
     enqueues on commit, so the parent message is queued only after the
@@ -193,13 +213,16 @@ def generate_invoices_for_class_term(*, class_level, term):
     Returns {'created': [Invoice, ...], 'skipped_student_ids': [...],
     'fee_structures': [FeeStructure, ...]}.
 
-    Raises ValidationError when no FeeStructure exists for the class+term
-    (an empty/zero invoice would be meaningless and likely admin error).
+    Raises ValidationError when no class fee and no school-wide fee exists
+    for the term (an empty invoice would be meaningless).
     """
-    fee_items = list(
+    class_fees = list(
         FeeStructure.objects.filter(class_level=class_level, term=term).order_by('name')
     )
-    if not fee_items:
+    school_fees = list(
+        FeeStructure.objects.filter(class_level__isnull=True, term=term).order_by('name')
+    )
+    if not class_fees and not school_fees:
         raise ValidationError(
             {
                 'detail': (
@@ -208,42 +231,133 @@ def generate_invoices_for_class_term(*, class_level, term):
                 )
             }
         )
-    total = sum((f.amount for f in fee_items), Decimal('0.00'))
 
-    student_ids = list(
-        Enrollment.objects.filter(
+    # One invoice for the class bundle, then one invoice per school-wide fee.
+    groups = []
+    if class_fees:
+        groups.append(class_fees)
+    for fee in school_fees:
+        groups.append([fee])
+
+    locked_ids = (
+        Enrollment.objects.select_for_update()
+        .filter(
             class_level=class_level,
             term=term,
             status=Enrollment.Status.ACTIVE,
-        ).values_list('student_id', flat=True)
+        )
+        .order_by('student_id')
+        .values_list('student_id', flat=True)
     )
-    already_invoiced = set(
-        Invoice.objects.filter(
-            term=term,
-            student_id__in=student_ids,
-        ).values_list('student_id', flat=True)
-    )
+    student_ids = []
+    seen_students = set()
+    for student_id in locked_ids:
+        if student_id in seen_students:
+            continue
+        seen_students.add(student_id)
+        student_ids.append(student_id)
+
+    billed = {}
+    billed_rows = InvoiceLineItem.objects.filter(
+        invoice__term=term,
+        invoice__student_id__in=student_ids,
+    ).values_list('invoice__student_id', 'fee_structure_id')
+    for student_id, fee_id in billed_rows:
+        billed.setdefault(student_id, set()).add(fee_id)
 
     created = []
+    skipped = []
     for student_id in student_ids:
-        if student_id in already_invoiced:
-            continue
-        invoice = Invoice.objects.create(
-            student_id=student_id,
-            term=term,
-            total_amount=total,
-            status=Invoice.Status.UNPAID,
-        )
-        InvoiceLineItem.objects.bulk_create(
-            InvoiceLineItem(invoice=invoice, fee_structure=fee, amount=fee.amount)
-            for fee in fee_items
-        )
-        created.append(invoice)
+        already = billed.get(student_id, set())
+        made = False
+        for group in groups:
+            fresh = [fee for fee in group if fee.id not in already]
+            if not fresh:
+                continue
+            created.append(
+                _invoice_for_fees(student_id=student_id, term=term, fees=fresh)
+            )
+            made = True
+        if not made:
+            skipped.append(student_id)
 
     return {
         'created': created,
-        'skipped_student_ids': sorted(already_invoiced, key=str),
-        'fee_structures': fee_items,
+        'skipped_student_ids': sorted(skipped, key=str),
+        'fee_structures': class_fees + school_fees,
+    }
+
+
+@transaction.atomic
+def generate_invoices_for_all_classes(*, term):
+    """
+    Bill every actively enrolled student in every class for ``term``.
+
+    Uses ``generate_invoices_for_class_term`` per class, in class-name
+    order, so class fees stay one invoice and each school-wide fee stays
+    its own invoice. A school-wide fee already billed for a student is
+    not billed again when the next class is generated. A class with no
+    class fees and no school-wide fee is skipped. The whole run is one
+    transaction.
+
+    Raises ValidationError when no enrolled class has anything to bill.
+    """
+    school_fees_exist = FeeStructure.objects.filter(
+        class_level__isnull=True,
+        term=term,
+    ).exists()
+    class_levels = list(
+        ClassLevel.objects.filter(
+            enrollments__term=term,
+            enrollments__status=Enrollment.Status.ACTIVE,
+        )
+        .distinct()
+        .order_by('name')
+    )
+
+    created = []
+    skipped = []
+    fee_structures = []
+    billed_a_class = False
+    for class_level in class_levels:
+        has_class_fees = FeeStructure.objects.filter(
+            class_level=class_level,
+            term=term,
+        ).exists()
+        if not has_class_fees and not school_fees_exist:
+            continue
+        billed_a_class = True
+        result = generate_invoices_for_class_term(
+            class_level=class_level,
+            term=term,
+        )
+        created.extend(result['created'])
+        skipped.extend(result['skipped_student_ids'])
+        fee_structures.extend(result['fee_structures'])
+
+    if not billed_a_class:
+        raise ValidationError(
+            {
+                'detail': (
+                    'No fee structures exist for this term. '
+                    'Create fee items before generating invoices.'
+                )
+            }
+        )
+
+    created_student_ids = {invoice.student_id for invoice in created}
+    skipped_ids = sorted(
+        (
+            student_id
+            for student_id in set(skipped)
+            if student_id not in created_student_ids
+        ),
+        key=str,
+    )
+    return {
+        'created': created,
+        'skipped_student_ids': skipped_ids,
+        'fee_structures': fee_structures,
     }
 
 
@@ -414,13 +528,127 @@ def _paid_at_from_gateway(data):
     return dt
 
 
+def _supersede_pending_online_payments(invoice_ids):
+    """
+    Mark in-flight Paystack rows for these invoices as failed.
+
+    A combined checkout that still has a sibling invoice pending is failed
+    too, so an abandoned bundle cannot stay half-open. SUCCESS rows are
+    left alone. Called inside the caller's transaction.
+    """
+    pending = Payment.objects.filter(
+        invoice_id__in=list(invoice_ids),
+        gateway=Payment.Gateway.PAYSTACK,
+        status=Payment.Status.PENDING,
+    )
+    checkout_ids = list(
+        pending.exclude(checkout_id__isnull=True).values_list('checkout_id', flat=True)
+    )
+    pending.update(status=Payment.Status.FAILED)
+    if not checkout_ids:
+        return
+    PaymentCheckout.objects.filter(
+        pk__in=checkout_ids,
+        status=PaymentCheckout.Status.PENDING,
+    ).update(status=PaymentCheckout.Status.FAILED)
+    Payment.objects.filter(
+        checkout_id__in=checkout_ids,
+        gateway=Payment.Gateway.PAYSTACK,
+        status=Payment.Status.PENDING,
+    ).update(status=Payment.Status.FAILED)
+
+
+def _verify_and_apply_checkout(reference):
+    """
+    Apply one Paystack transaction that covers several invoices.
+
+    The Paystack reference is ``PaymentCheckout.reference``. Each child
+    Payment credits its own invoice. The platform commission log is written
+    once, for the checkout total, not once per invoice.
+    """
+    checkout = PaymentCheckout.objects.get(reference=reference)
+    if checkout.status == PaymentCheckout.Status.SUCCESS:
+        _record_platform_transaction_log(checkout)
+        return checkout
+
+    data = verify_transaction(checkout.reference)
+    gateway_status = (data.get('status') or '').lower()
+    try:
+        gateway_kobo = int(data.get('amount'))
+    except (TypeError, ValueError):
+        gateway_kobo = None
+    expected_kobo = naira_to_kobo(checkout.amount)
+
+    amount_mismatch = False
+    with transaction.atomic():
+        locked = PaymentCheckout.objects.select_for_update().get(pk=checkout.pk)
+        if locked.status == PaymentCheckout.Status.SUCCESS:
+            _record_platform_transaction_log(locked)
+            return locked
+
+        payments = list(
+            Payment.objects.select_for_update()
+            .filter(checkout=locked)
+            .select_related('invoice')
+            .order_by('pk')
+        )
+        matched = gateway_status == 'success' and gateway_kobo == expected_kobo
+        if gateway_status == 'success' and gateway_kobo != expected_kobo:
+            logger.warning(
+                'Paystack amount mismatch for reference=%s expected_kobo=%s '
+                'gateway_kobo=%s',
+                locked.reference,
+                expected_kobo,
+                gateway_kobo,
+            )
+            amount_mismatch = True
+
+        if not matched:
+            locked.status = PaymentCheckout.Status.FAILED
+            locked.save(update_fields=['status'])
+            for payment in payments:
+                if payment.status != Payment.Status.SUCCESS:
+                    payment.status = Payment.Status.FAILED
+                    payment.save(update_fields=['status'])
+        else:
+            paid_at = _paid_at_from_gateway(data)
+            invoice_ids = []
+            for payment in payments:
+                if payment.status != Payment.Status.SUCCESS:
+                    payment.status = Payment.Status.SUCCESS
+                    payment.paid_at = paid_at
+                    payment.save(update_fields=['status', 'paid_at'])
+                invoice_ids.append(payment.invoice_id)
+            for invoice in (
+                Invoice.objects.select_for_update()
+                .filter(pk__in=invoice_ids)
+                .order_by('pk')
+            ):
+                recompute_invoice_payment_status(invoice)
+            locked.status = PaymentCheckout.Status.SUCCESS
+            locked.paid_at = paid_at
+            locked.save(update_fields=['status', 'paid_at'])
+            _record_platform_transaction_log(locked)
+
+    if amount_mismatch:
+        raise PaymentAmountMismatch(
+            'Verified amount does not match the payment on record.'
+        )
+    return locked
+
+
 def verify_and_apply_payment(reference):
     """
     Single verify-and-apply entry point for Paystack payments.
 
     Signature (stable — Prompt 5's webhook must call this, not a copy)::
 
-        verify_and_apply_payment(reference: str) -> Payment
+        verify_and_apply_payment(reference: str) -> Payment | PaymentCheckout
+
+    A reference stored on Payment settles that one invoice. A reference
+    stored on PaymentCheckout settles every invoice in that combined
+    checkout. Callers (return-flow and webhook) pass the Paystack
+    reference through unchanged.
 
     Callers:
       * Prompt 4 return-flow: ``POST /api/finance/payments/verify/``
@@ -447,10 +675,14 @@ def verify_and_apply_payment(reference):
       6. On non-success gateway status: mark FAILED; invoice is unchanged
          because only SUCCESS totals count.
 
-    Raises Payment.DoesNotExist, PaystackError, PaymentAmountMismatch,
-    ValidationError (non-paystack gateway — Prompt 6 cash/transfer must
-    not call this).
+    Raises Payment.DoesNotExist when the reference matches neither a
+    Payment nor a PaymentCheckout, plus PaystackError, PaymentAmountMismatch,
+    and ValidationError (non-paystack gateway — cash/transfer must not
+    call this).
     """
+    if PaymentCheckout.objects.filter(reference=reference).exists():
+        return _verify_and_apply_checkout(reference)
+
     payment = Payment.objects.select_related('invoice').get(reference=reference)
 
     if payment.gateway != Payment.Gateway.PAYSTACK:
@@ -644,12 +876,9 @@ def initialize_invoice_payment(*, invoice, parent, amount=None):
             )
 
         # One in-flight Paystack checkout per invoice. Abandoned tabs must
-        # not block a retry; SUCCESS rows are untouched.
-        Payment.objects.filter(
-            invoice=locked,
-            gateway=Payment.Gateway.PAYSTACK,
-            status=Payment.Status.PENDING,
-        ).update(status=Payment.Status.FAILED)
+        # not block a retry; SUCCESS rows are untouched. A combined checkout
+        # that includes this invoice is failed with its other pending rows.
+        _supersede_pending_online_payments([locked.pk])
 
         payment = Payment.objects.create(
             invoice=locked,
@@ -689,6 +918,108 @@ def initialize_invoice_payment(*, invoice, parent, amount=None):
     # stays null. Prompt 4/5 (verify/webhook) mark Paystack success;
     # Prompt 6 records cash/transfer as SUCCESS without going through here.
     return payment, data
+
+
+def initialize_invoices_payment(*, invoices, parent):
+    """
+    Start one Paystack checkout that pays the outstanding balance of each
+    invoice in ``invoices``.
+
+    Every invoice is charged in full (its current outstanding). Partial
+    amounts stay on the single-invoice path. Each invoice gets a pending
+    Payment linked to one PaymentCheckout; Paystack is called with the
+    checkout reference and the sum. Invoice status does not change until
+    verify or the webhook applies that reference.
+
+    Raises OnlinePaymentsUnavailable, ValidationError, PaystackError.
+    """
+    account = get_active_payment_account()
+    if account is None:
+        raise OnlinePaymentsUnavailable(
+            'Online fee payment is not available until this school '
+            'verifies a settlement account. Pay at the bursar in the meantime.'
+        )
+    if not parent.email:
+        raise ValidationError({'detail': 'A parent email is required to start checkout.'})
+
+    ordered = []
+    seen = set()
+    for invoice in invoices:
+        if invoice.pk in seen:
+            continue
+        seen.add(invoice.pk)
+        ordered.append(invoice)
+    if len(ordered) < 2:
+        raise ValidationError(
+            {'invoices': 'Select at least two invoices, or pay a single invoice.'}
+        )
+
+    with transaction.atomic():
+        locked_rows = {
+            row.pk: row
+            for row in Invoice.objects.select_for_update().filter(
+                pk__in=[invoice.pk for invoice in ordered]
+            )
+        }
+        charges = []
+        for invoice in ordered:
+            locked = locked_rows[invoice.pk]
+            outstanding = invoice_outstanding(locked)
+            if outstanding <= 0:
+                raise ValidationError(
+                    {'detail': 'One of these invoices is already paid in full.'}
+                )
+            charges.append((locked, outstanding))
+
+        _supersede_pending_online_payments([locked.pk for locked, _amount in charges])
+
+        total = sum((amount for _locked, amount in charges), Decimal('0.00'))
+        checkout = PaymentCheckout.objects.create(
+            reference=_new_payment_reference(),
+            amount=total,
+            status=PaymentCheckout.Status.PENDING,
+            initiated_by=parent,
+        )
+        payments = [
+            Payment.objects.create(
+                invoice=locked,
+                checkout=checkout,
+                amount=amount,
+                reference=_new_payment_reference(),
+                status=Payment.Status.PENDING,
+                gateway=Payment.Gateway.PAYSTACK,
+                initiated_by=parent,
+                paid_at=None,
+            )
+            for locked, amount in charges
+        ]
+
+    try:
+        data = initialize_transaction(
+            email=parent.email,
+            amount_naira=checkout.amount,
+            reference=checkout.reference,
+            subaccount=account.subaccount_code,
+            metadata={
+                'checkout_id': str(checkout.id),
+                'invoice_ids': ','.join(str(payment.invoice_id) for payment in payments),
+            },
+        )
+    except Exception:
+        checkout.status = PaymentCheckout.Status.FAILED
+        checkout.save(update_fields=['status'])
+        Payment.objects.filter(checkout=checkout).update(status=Payment.Status.FAILED)
+        raise
+
+    authorization_url = data.get('authorization_url')
+    if not authorization_url:
+        checkout.status = PaymentCheckout.Status.FAILED
+        checkout.save(update_fields=['status'])
+        Payment.objects.filter(checkout=checkout).update(status=Payment.Status.FAILED)
+        raise ValidationError(
+            {'detail': 'Gateway did not return a checkout URL; payment not started.'}
+        )
+    return checkout, payments, data
 
 
 # ---------------------------------------------------------------------------

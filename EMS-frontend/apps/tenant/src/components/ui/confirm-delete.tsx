@@ -11,6 +11,7 @@ export type ConfirmDeleteModalProps = {
   description: string;
   pending?: boolean;
   confirmLabel?: string;
+  error?: string | null;
 };
 
 export function ConfirmDeleteModal({
@@ -21,6 +22,7 @@ export function ConfirmDeleteModal({
   description,
   pending = false,
   confirmLabel = "Delete",
+  error = null,
 }: ConfirmDeleteModalProps) {
   return (
     <Modal
@@ -44,6 +46,11 @@ export function ConfirmDeleteModal({
       }
     >
       <p className="text-sm text-ink/80">{description}</p>
+      {error ? (
+        <p role="alert" className="mt-3 text-sm font-medium" style={{ color: "#8B2424" }}>
+          {error}
+        </p>
+      ) : null}
     </Modal>
   );
 }

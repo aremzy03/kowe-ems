@@ -8,7 +8,7 @@ import {
 } from "@/components/finance/CollectionsDashboard";
 import { FeeStructuresPanel } from "@/components/finance/FeeStructuresPanel";
 import { EmptyState, PageHeader, PencilAside } from "@/components/ui";
-import { academicsApi } from "@/lib/api/academics";
+import { academicsApi, currentTerm } from "@/lib/api/academics";
 import { financeApi } from "@/lib/api/finance";
 
 export default function AdminFeesPage() {
@@ -16,7 +16,8 @@ export default function AdminFeesPage() {
     queryKey: ["academics", "terms"],
     queryFn: () => academicsApi.terms.list(),
   });
-  const termId = terms.data?.[0]?.id;
+  const termId = currentTerm(terms.data)?.id;
+  const hasTerms = (terms.data?.length ?? 0) > 0;
   const collections = useQuery({
     queryKey: ["finance", "collections", termId],
     queryFn: () =>
@@ -35,8 +36,12 @@ export default function AdminFeesPage() {
 
       {!termId && !terms.isLoading ? (
         <EmptyState
-          headline="No terms yet"
-          body="Create an academic term before viewing fee collections."
+          headline={hasTerms ? "No current term" : "No terms yet"}
+          body={
+            hasTerms
+              ? "Set the current term in Academics. Fee collections use that term."
+              : "Create an academic term before viewing fee collections."
+          }
         />
       ) : (
         <section className="space-y-3">

@@ -91,7 +91,17 @@ class PaymentAccountOnboardSerializer(serializers.Serializer):
 class FeeStructureSerializer(serializers.ModelSerializer):
     """Admin CRUD for fee items. Amount is Decimal (string in JSON) — never float."""
 
-    class_level_name = serializers.CharField(source='class_level.name', read_only=True)
+    class_level = serializers.PrimaryKeyRelatedField(
+        queryset=ClassLevel.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text='Omit or null to bill every class in the term.',
+    )
+    class_level_name = serializers.CharField(
+        source='class_level.name',
+        read_only=True,
+        allow_null=True,
+    )
     term_name = serializers.CharField(source='term.name', read_only=True)
     session_name = serializers.CharField(source='term.session.name', read_only=True)
     amount = serializers.DecimalField(
@@ -113,6 +123,32 @@ class FeeStructureSerializer(serializers.ModelSerializer):
             'amount',
         )
         read_only_fields = ('id', 'class_level_name', 'term_name', 'session_name')
+
+    def validate(self, attrs):
+        instance = getattr(self, 'instance', None)
+        if 'class_level' in attrs:
+            class_level = attrs['class_level']
+        else:
+            class_level = instance.class_level if instance is not None else None
+        term = attrs.get('term', instance.term if instance is not None else None)
+        name = attrs.get('name', instance.name if instance is not None else None)
+        if class_level is None and term is not None and name:
+            existing = FeeStructure.objects.filter(
+                class_level__isnull=True,
+                term=term,
+                name=name,
+            )
+            if instance is not None:
+                existing = existing.exclude(pk=instance.pk)
+            if existing.exists():
+                raise serializers.ValidationError(
+                    {
+                        'name': (
+                            'A school-wide fee with this name already exists for this term.'
+                        )
+                    }
+                )
+        return attrs
 
 
 class InvoiceLineItemSerializer(serializers.ModelSerializer):
@@ -184,22 +220,43 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
 
 class InvoiceGenerateSerializer(serializers.Serializer):
-    """Input for bulk invoice generation: which class level and term to bill."""
+    """Input for bulk invoice generation.
 
-    class_level = serializers.PrimaryKeyRelatedField(queryset=ClassLevel.objects.all())
+    ``class_level`` bills that class. Omit it, or send null, to bill every
+    class with active enrollments in the term.
+    """
+
+    class_level = serializers.PrimaryKeyRelatedField(
+        queryset=ClassLevel.objects.all(),
+        required=False,
+        allow_null=True,
+    )
     term = serializers.PrimaryKeyRelatedField(queryset=Term.objects.all())
 
 
 class InitializePaymentSerializer(serializers.Serializer):
     """
-    Parent starts Paystack checkout for a linked student's invoice.
+    Parent starts Paystack checkout.
 
-    ``amount`` is optional naira. Omitted → pay the outstanding balance
-    (which may be a remaining installment, not necessarily the original
-    total). When provided it must be a positive Decimal ≤ outstanding.
+    One invoice: ``invoice`` plus optional ``amount`` (naira). Omitted
+    amount pays the outstanding balance. A provided amount must be a
+    positive Decimal no greater than that outstanding balance.
+
+    Several invoices: ``invoices`` (at least two). Each is paid in full
+    for its current outstanding balance, in one Paystack charge. ``amount``
+    is not accepted on a combined checkout.
     """
 
-    invoice = serializers.PrimaryKeyRelatedField(queryset=Invoice.objects.all())
+    invoice = serializers.PrimaryKeyRelatedField(
+        queryset=Invoice.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    invoices = serializers.PrimaryKeyRelatedField(
+        queryset=Invoice.objects.all(),
+        many=True,
+        required=False,
+    )
     amount = serializers.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -207,6 +264,41 @@ class InitializePaymentSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
+
+    def validate(self, attrs):
+        invoice = attrs.get('invoice')
+        invoices = attrs.get('invoices') or []
+        amount = attrs.get('amount')
+        if invoice is not None and invoices:
+            raise serializers.ValidationError(
+                'Send either invoice or invoices, not both.'
+            )
+        if invoice is None and not invoices:
+            raise serializers.ValidationError('Choose an invoice to pay.')
+        if invoices:
+            if amount is not None:
+                raise serializers.ValidationError(
+                    {
+                        'amount': (
+                            'A combined payment pays each invoice in full. '
+                            'Omit amount.'
+                        )
+                    }
+                )
+            ids = [item.id for item in invoices]
+            if len(ids) != len(set(ids)):
+                raise serializers.ValidationError(
+                    {'invoices': 'Each invoice can only be included once.'}
+                )
+            if len(invoices) < 2:
+                raise serializers.ValidationError(
+                    {
+                        'invoices': (
+                            'Select at least two invoices, or send a single invoice.'
+                        )
+                    }
+                )
+        return attrs
 
 
 class VerifyPaymentSerializer(serializers.Serializer):

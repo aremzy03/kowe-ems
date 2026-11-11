@@ -1,6 +1,6 @@
 # EMS-api changelog
 
-Status snapshot as of **2026-11-06** (evening: memberships directory, guardians/linking codes, payment ledger, `/auth/me`, protected destroys, assessment scheme list filters). This is the current state of the Django API, not a release history. Phases 0–5 are implemented in code. Several exit checks are still manual or live-only.
+Status snapshot as of **2026-11-11** (school-wide fees, combined Paystack checkout, generate-all-classes, pytest on SQLite). Earlier the same file recorded **2026-11-06** evening: memberships directory, guardians/linking codes, payment ledger, `/auth/me`, protected destroys, assessment scheme list filters. This is the current state of the Django API, not a release history. Phases 0–5 are implemented in code. Several exit checks are still manual or live-only.
 
 Playbooks: `EMS-Phase0-Init-Playbook.md` through `EMS-Phase5-Init-Playbook.md`. Bruno collection: `bruno/` (Phases 0–5).
 
@@ -8,7 +8,7 @@ Playbooks: `EMS-Phase0-Init-Playbook.md` through `EMS-Phase5-Init-Playbook.md`. 
 
 Schema-per-tenant (`django-tenants`). One API host. The school schema comes from the JWT `tenant_schema` claim, then `X-Tenant-Slug`. `Host` does not select a tenant (Option B / Phase 0.1).
 
-Local settings: `config.settings.local`. Postgres for this machine is the `ems-api_db_1` container on host port **5433**. Redis is already on **6379**. `manage.py test` cannot `CREATE DATABASE` (`dev_user` lacks `CREATEDB`); suites were run with `--keepdb` against the existing database when `test_ems_db` still existed. Later the same day that DB was missing, so several new suites are written but not executed.
+Local settings: `config.settings.local`. Postgres for this machine is the `ems-api_db_1` container on host port **5433**. Redis is already on **6379**. Unit tests do not use that database. From `EMS-api`, `python -m pytest` loads `config.settings.test` and a temporary SQLite file (`config.db.sqlite_tenant`). **296 passed**, 4 subtests, on 2026-11-11. `manage.py test` against Postgres still cannot `CREATE DATABASE` (`dev_user` lacks `CREATEDB`).
 
 Local schools present: `testacademy`, `testacademy2`. `testacademy` has an active admin (`admin@testacademy.local`) plus teacher, bursar, and parent accounts from the browser walks.
 
@@ -24,9 +24,38 @@ Local schools present: `testacademy`, `testacademy2`. `testacademy` has an activ
 
 `communications` is no longer an empty app.
 
+## Finance billing (2026-11-11)
+
+Migration `finance.0005_schoolwide_fees_and_combined_checkout` is applied on the app database (public schema and each tenant schema).
+
+### School-wide fees
+
+- `FeeStructure.class_level` is nullable. Empty means the fee applies to every class in that term (textbook, uniform, bus, excursion).
+- Class fees for one class and term are still one itemized invoice. Each school-wide fee is its own invoice, so it can be paid alone or in a combined checkout.
+- Uniqueness: the existing `(class_level, term, name)` constraint, plus a partial unique constraint on `(term, name)` where `class_level` is null. The serializer rejects a second school-wide fee with the same term and name (Postgres treats those nulls as distinct).
+- `Invoice` no longer has a unique `(student, term)` constraint. A student can have several invoices in one term.
+- Generation is idempotent by fee line item, not by “any invoice for the term”. Active enrollment rows are locked with `select_for_update`. A re-run bills only new students or new fees.
+
+### Generate for every class
+
+- `POST /api/finance/invoices/generate/` still takes `class_level` + `term` for one class. Admin or bursar with confirmed TOTP.
+- Omit `class_level`, or send null, to bill every class with active enrollments in that term. Classes run in name order inside one transaction. A class with no class fees and no school-wide fee is skipped. A school-wide fee already billed to a student is not billed again. **400** when no enrolled class has anything to bill. The response shape is unchanged: `created_count`, `skipped_count`, `skipped_student_ids`, `invoices`.
+
+### Combined Paystack checkout
+
+- Initialize accepts either `invoice` (optional partial `amount`, in naira) or `invoices` (at least two ids). A bundle rejects `amount` and pays each invoice’s full outstanding.
+- One `PaymentCheckout` (`reference` `pay_{uuid}`, total amount) and one pending `Payment` per invoice, linked by `Payment.checkout`.
+- The parent must be linked to every student on the bundle. Otherwise **404** and nothing is created.
+- `verify_and_apply_payment` is still the only Paystack apply path. A checkout reference marks each child payment, recomputes each invoice, and writes one `PlatformTransactionLog` for the checkout total. Verifying the same reference again does not call Paystack. A kobo mismatch fails the checkout and its non-success children.
+- Starting a new checkout for an invoice that already has a pending Paystack payment fails that checkout and its sibling pending rows.
+
+### Settlement account
+
+- `SchoolPaymentAccountView` permission is `IsAdminOrBursar`. A bursar with confirmed TOTP can onboard. A teacher still gets **403**. A second onboard is still **409**.
+
 ## Gap closure (2026-11-06 evening)
 
-Work that closed the earlier “Not in this API” / incomplete-CRUD gaps. Live smoke on `testacademy`; new unit tests are written but blocked by the `CREATEDB` / missing `test_ems_db` limitation unless that is fixed first.
+Work that closed the earlier “Not in this API” / incomplete-CRUD gaps. Live smoke on `testacademy`. The suites below now run with `python -m pytest` on SQLite (they do not need `CREATEDB`).
 
 ### Memberships and invites
 
@@ -88,7 +117,7 @@ A browser walk on `testacademy` the same day published JSS1 A (1st term, 2026/20
 - Run a Celery worker in any environment where rows should leave `queued`.
 - Point `bruno/.env` at the `testacademy` admin (`admin@testacademy.local` plus that user’s TOTP secret) and rerun `bruno/scripts/run-phase5.sh`. The earlier live run stopped at login with **401** when the schema had no memberships. That membership now exists. The Bruno suite has not been rerun.
 - Update `bruno/Assessment/20` so `run-phase2.sh` does not expect a parent PDF with HTTP 200 before publish. Phase 5 covers that PDF in `Communications/07` (404) and `Communications/10` (200).
-- Grant `CREATEDB` (or recreate `test_ems_db`) so gap-closure suites can run: memberships, academics guardian/link tests, finance ledger retrieve tests, accounts `me` tests.
+- `manage.py test` on Postgres still needs `CREATEDB` or an existing `test_ems_db`. The pytest suite does not: it uses SQLite and does not open the app database.
 - Optionally gate `platform_admin` behind `REQUIRE_ADMIN_2FA` the same way school admin/bursar are. The platform frontend now handles `requires_2fa`; the live API still returns tokens immediately for platform operators when that flag is off / role is outside the 2FA set.
 
 ## Needs confirming
@@ -100,7 +129,8 @@ A browser walk on `testacademy` the same day published JSS1 A (1st term, 2026/20
 - [ ] Paystack: live test-card checkout, and platform commission in `PlatformTransactionLog` matching the Paystack dashboard. Tests and Bruno use the stub gateway and a fixture HMAC secret.
 - [ ] Two-schema isolation and “no secrets committed” were not re-audited on 2026-11-06.
 - [ ] Login bug, already reproduced: a leftover platform `refresh_token` (`tenant_schema: public`) is applied before `X-Tenant-Slug`, so school login returns `no_membership` even when the admin membership exists. Clear the cookie for `localhost:8000`, or fix the middleware so a public refresh cookie does not pin a school login.
-- [x] Gap-closure live smoke on `testacademy` (memberships, guardians/regenerate, payment ledger empty-state + 403/405 paths, `/auth/me`, assessment set-scheme/clone-scheme). Full pytest modules for those areas still blocked by `CREATEDB`.
+- [x] Gap-closure live smoke on `testacademy` (memberships, guardians/regenerate, payment ledger empty-state + 403/405 paths, `/auth/me`, assessment set-scheme/clone-scheme). Those modules now run under `python -m pytest` on SQLite (full suite **296 passed** on 2026-11-11).
+- [ ] School-wide fees, all-class generate, and combined Paystack checkout on a live `testacademy` walk (bursar onboard, one charge for two invoices, generate with no `class_level`). Covered by pytest; not yet clicked through in the browser. The open browser session on 2026-11-11 was not a bursar, so `/bursar/invoices/generate` did not render the form.
 
 ## Not in this API
 

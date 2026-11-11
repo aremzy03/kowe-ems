@@ -8,7 +8,13 @@ from academics.parent_access import (
     filter_queryset_for_parent_student_access,
     parent_has_link_to_student,
 )
-from finance.models import FeeStructure, Invoice, Payment, SchoolPaymentAccount
+from finance.models import (
+    FeeStructure,
+    Invoice,
+    Payment,
+    PaymentCheckout,
+    SchoolPaymentAccount,
+)
 from finance.paystack import PaystackError
 from finance.serializers import (
     FeeStructureSerializer,
@@ -28,14 +34,16 @@ from finance.services import (
     PaymentAmountMismatch,
     collection_dashboard_for_term,
     current_active_term,
+    generate_invoices_for_all_classes,
     generate_invoices_for_class_term,
     initialize_invoice_payment,
+    initialize_invoices_payment,
     onboard_school_payment_account,
     paid_amount_annotation,
     record_manual_payment,
     verify_and_apply_payment,
 )
-from memberships.permissions import IsAdminOrBursar, IsParent, IsSchoolAdmin
+from memberships.permissions import IsAdminOrBursar, IsParent
 
 
 def _invoice_payments_prefetch():
@@ -75,11 +83,11 @@ class SchoolPaymentAccountView(APIView):
     GET  /api/finance/payment-account/ — current onboarding state (masked).
     POST /api/finance/payment-account/ — submit bank_code + account_number;
          server resolves the account with Paystack, creates the split
-         subaccount, and stores the verified result. Admin-only (2FA-gated
-         via IsSchoolAdmin).
+         subaccount, and stores the verified result. School admin or bursar
+         (both 2FA-gated via IsAdminOrBursar).
     """
 
-    permission_classes = [IsSchoolAdmin]
+    permission_classes = [IsAdminOrBursar]
 
     def get(self, request):
         account = SchoolPaymentAccount.objects.first()
@@ -171,9 +179,9 @@ class InvoiceGenerateView(APIView):
     """
     POST /api/finance/invoices/generate/ — admin or bursar.
 
-    Generates invoices for every actively-enrolled student in a class
-    level + term in one call. Students who already have an invoice for the
-    term are skipped (idempotent re-run — no duplicates).
+    With ``class_level``, bills every actively enrolled student in that
+    class and term. Without it, bills every class in the term. A fee
+    already on a line item for that student and term is not billed again.
     """
 
     permission_classes = [IsAdminOrBursar]
@@ -182,11 +190,16 @@ class InvoiceGenerateView(APIView):
         serializer = InvoiceGenerateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        term = serializer.validated_data['term']
+        class_level = serializer.validated_data.get('class_level')
         try:
-            result = generate_invoices_for_class_term(
-                class_level=serializer.validated_data['class_level'],
-                term=serializer.validated_data['term'],
-            )
+            if class_level is None:
+                result = generate_invoices_for_all_classes(term=term)
+            else:
+                result = generate_invoices_for_class_term(
+                    class_level=class_level,
+                    term=term,
+                )
         except DjangoValidationError as exc:
             detail = exc.message_dict if hasattr(exc, 'message_dict') else str(exc)
             return Response(detail, status=status.HTTP_400_BAD_REQUEST)
@@ -332,6 +345,10 @@ class InitializePaymentView(APIView):
     def post(self, request):
         serializer = InitializePaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        invoices = serializer.validated_data.get('invoices') or []
+        if invoices:
+            return self._initialize_many(request, invoices)
+
         invoice = serializer.validated_data['invoice']
 
         # 404 rather than 403 so invoice IDs of other students don't leak.
@@ -378,6 +395,52 @@ class InitializePaymentView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
+    def _initialize_many(self, request, invoices):
+        """One Paystack charge for every selected invoice's outstanding balance."""
+        # 404 if any student is not linked, so other families' invoice IDs
+        # are not confirmed and nothing is created.
+        for invoice in invoices:
+            if not parent_has_link_to_student(request.user, invoice.student_id):
+                return Response(
+                    {'detail': 'Not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        try:
+            checkout, payments, gateway_data = initialize_invoices_payment(
+                invoices=invoices,
+                parent=request.user,
+            )
+        except OnlinePaymentsUnavailable as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
+        except DjangoValidationError as exc:
+            detail = exc.message_dict if hasattr(exc, 'message_dict') else str(exc)
+            return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+        except PaystackError as exc:
+            gateway_client_error = (
+                exc.status_code is not None and 400 <= exc.status_code < 500
+            )
+            return Response(
+                {'detail': exc.message},
+                status=status.HTTP_400_BAD_REQUEST
+                if gateway_client_error
+                else status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                'authorization_url': gateway_data['authorization_url'],
+                'access_code': gateway_data.get('access_code'),
+                'reference': checkout.reference,
+                'amount': str(checkout.amount),
+                'payment_id': str(checkout.id),
+                'invoice': None,
+                'invoices': [str(payment.invoice_id) for payment in payments],
+                'invoice_status': None,
+                'payment_status': checkout.status,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class VerifyPaymentView(APIView):
     """
@@ -396,26 +459,44 @@ class VerifyPaymentView(APIView):
         serializer.is_valid(raise_exception=True)
         reference = serializer.validated_data['reference']
 
-        try:
-            payment = Payment.objects.select_related('invoice').get(
-                reference=reference
+        payment = (
+            Payment.objects.select_related('invoice')
+            .filter(reference=reference)
+            .first()
+        )
+        checkout = None
+        if payment is None:
+            checkout = (
+                PaymentCheckout.objects.filter(reference=reference)
+                .prefetch_related('payments__invoice')
+                .first()
             )
-        except Payment.DoesNotExist:
+        if payment is None and checkout is None:
             return Response(
                 {'detail': 'Not found.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         # 404 rather than 403 so references for other students don't leak.
-        if not parent_has_link_to_student(request.user, payment.invoice.student_id):
+        if payment is not None:
+            linked = parent_has_link_to_student(
+                request.user, payment.invoice.student_id
+            )
+        else:
+            student_ids = {row.invoice.student_id for row in checkout.payments.all()}
+            linked = bool(student_ids) and all(
+                parent_has_link_to_student(request.user, student_id)
+                for student_id in student_ids
+            )
+        if not linked:
             return Response(
                 {'detail': 'Not found.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         try:
-            payment = verify_and_apply_payment(reference)
-        except Payment.DoesNotExist:
+            applied = verify_and_apply_payment(reference)
+        except (Payment.DoesNotExist, PaymentCheckout.DoesNotExist):
             return Response(
                 {'detail': 'Not found.'},
                 status=status.HTTP_404_NOT_FOUND,
@@ -436,15 +517,37 @@ class VerifyPaymentView(APIView):
                 else status.HTTP_502_BAD_GATEWAY,
             )
 
-        invoice = payment.invoice
+        if isinstance(applied, PaymentCheckout):
+            rows = list(applied.payments.select_related('invoice'))
+            return Response(
+                {
+                    'reference': applied.reference,
+                    'payment_id': str(applied.id),
+                    'amount': str(applied.amount),
+                    'payment_status': applied.status,
+                    'paid_at': applied.paid_at,
+                    'invoice': None,
+                    'invoices': [
+                        {
+                            'invoice': str(row.invoice_id),
+                            'amount': str(row.amount),
+                            'invoice_status': row.invoice.status,
+                        }
+                        for row in rows
+                    ],
+                    'invoice_status': None,
+                }
+            )
+
+        invoice = applied.invoice
         invoice.refresh_from_db()
         return Response(
             {
-                'reference': payment.reference,
-                'payment_id': str(payment.id),
-                'amount': str(payment.amount),
-                'payment_status': payment.status,
-                'paid_at': payment.paid_at,
+                'reference': applied.reference,
+                'payment_id': str(applied.id),
+                'amount': str(applied.amount),
+                'payment_status': applied.status,
+                'paid_at': applied.paid_at,
                 'invoice': str(invoice.id),
                 'invoice_status': invoice.status,
             }

@@ -8,14 +8,15 @@ import {
 } from "@/components/attendance/AttendanceOverview";
 import { EmptyState, PageHeader, PencilAside } from "@/components/ui";
 import { attendanceApi } from "@/lib/api/attendance";
-import { academicsApi } from "@/lib/api/academics";
+import { academicsApi, currentTerm } from "@/lib/api/academics";
 
 export default function AdminAttendancePage() {
   const terms = useQuery({
     queryKey: ["academics", "terms"],
     queryFn: () => academicsApi.terms.list(),
   });
-  const termId = terms.data?.[0]?.id;
+  const termId = currentTerm(terms.data)?.id;
+  const hasTerms = (terms.data?.length ?? 0) > 0;
   const overview = useQuery({
     queryKey: ["attendance", "admin-overview", termId],
     queryFn: () =>
@@ -36,8 +37,12 @@ export default function AdminAttendancePage() {
 
       {!termId && !terms.isLoading ? (
         <EmptyState
-          headline="No terms yet"
-          body="Create an academic term before viewing attendance overview."
+          headline={hasTerms ? "No current term" : "No terms yet"}
+          body={
+            hasTerms
+              ? "Set the current term in Academics. This overview uses that term."
+              : "Create an academic term before viewing attendance overview."
+          }
         />
       ) : (
         <>

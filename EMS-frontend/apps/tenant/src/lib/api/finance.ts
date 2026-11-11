@@ -8,8 +8,8 @@ function unwrapList<T>(data: Paginated<T> | T[]): T[] {
 export type FeeStructure = {
   id: string;
   name: string;
-  class_level: string;
-  class_level_name?: string;
+  class_level: string | null;
+  class_level_name?: string | null;
   term: string;
   term_name?: string;
   session_name?: string;

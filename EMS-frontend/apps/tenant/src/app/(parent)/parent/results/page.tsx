@@ -16,7 +16,7 @@ import {
   TR,
 } from "@/components/ui";
 import { Toast } from "@/components/ui/client";
-import { academicsApi } from "@/lib/api/academics";
+import { academicsApi, currentTerm } from "@/lib/api/academics";
 import { assessmentApi } from "@/lib/api/assessment";
 import { ApiRequestError } from "@/lib/api/client";
 import { useParentChildren } from "@/lib/parent/children";
@@ -56,7 +56,7 @@ export default function ParentResultsPage() {
     queryKey: ["academics", "terms"],
     queryFn: () => academicsApi.terms.list(),
   });
-  const termId = terms.data?.[0]?.id;
+  const termId = currentTerm(terms.data)?.id;
   const results = useQuery({
     queryKey: ["assessment", "student-results", selected?.id, termId],
     queryFn: () => assessmentApi.studentResults(selected!.id, termId!),
@@ -103,6 +103,26 @@ export default function ParentResultsPage() {
         headline="Select a child"
         body="Link a student to view results."
       />
+    );
+  }
+
+  if (terms.isSuccess && !termId) {
+    const hasTerms = (terms.data?.length ?? 0) > 0;
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-4">
+        <PageHeader
+          title="Results"
+          description={`${selected.name} · term results`}
+        />
+        <EmptyState
+          headline={hasTerms ? "No current term" : "No terms yet"}
+          body={
+            hasTerms
+              ? "Results follow the term the school marks as current."
+              : "The school has not added a term yet."
+          }
+        />
+      </div>
     );
   }
 

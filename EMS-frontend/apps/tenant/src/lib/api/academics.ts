@@ -35,6 +35,18 @@ export type Term = {
   is_active?: boolean;
 };
 
+/**
+ * The current term is the first term with `is_active`.
+ * Fees, Attendance, bursar home, parent term views, and the staff top bar
+ * read this. The API does not enforce a single active term; Academics
+ * clears the flag on the others when one is made current.
+ */
+export function currentTerm(
+  terms: readonly Term[] | null | undefined,
+): Term | undefined {
+  return terms?.find((term) => term.is_active);
+}
+
 export type ClassLevel = { id: string; name: string; order?: number };
 export type Arm = { id: string; name: string; class_level: string };
 export type Subject = { id: string; name: string; code?: string };
@@ -341,6 +353,16 @@ export const academicsApi = {
         "/api/academics/class-subject-assignments/",
         { method: "POST", body, auth: true },
       ),
+    update: (id: string, body: Partial<ClassSubjectAssignment>) =>
+      apiFetch<ClassSubjectAssignment>(
+        `/api/academics/class-subject-assignments/${id}/`,
+        { method: "PATCH", body, auth: true },
+      ),
+    remove: (id: string) =>
+      apiFetch(`/api/academics/class-subject-assignments/${id}/`, {
+        method: "DELETE",
+        auth: true,
+      }),
   },
   classTeacherAssignments: {
     list: () =>
@@ -352,6 +374,16 @@ export const academicsApi = {
         "/api/academics/class-teacher-assignments/",
         { method: "POST", body, auth: true },
       ),
+    update: (id: string, body: Partial<ClassTeacherAssignment>) =>
+      apiFetch<ClassTeacherAssignment>(
+        `/api/academics/class-teacher-assignments/${id}/`,
+        { method: "PATCH", body, auth: true },
+      ),
+    remove: (id: string) =>
+      apiFetch(`/api/academics/class-teacher-assignments/${id}/`, {
+        method: "DELETE",
+        auth: true,
+      }),
   },
   myStudents: () =>
     listResource<Student>("/api/academics/my-students/").catch(async () => {

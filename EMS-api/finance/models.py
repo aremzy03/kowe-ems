@@ -85,12 +85,14 @@ class SchoolPaymentAccount(models.Model):
 
 class FeeStructure(models.Model):
     """
-    A single billable fee item for a class level in a term
-    (e.g. JSS1 / 1st term / "Tuition" / 150000.00).
+    A single billable fee item for a term.
 
-    Invoice generation (Prompt 2) sums every FeeStructure matching a
-    student's class_level + term. Amounts are Decimal end-to-end — never
-    float — per the money-safety rules for this phase.
+    ``class_level`` set: only that class (e.g. JSS1 / 1st term / Tuition).
+    ``class_level`` null: every class in the term (textbook, uniform, bus).
+
+    Invoice generation bills class fees as one itemized invoice and each
+    school-wide fee as its own invoice, so a parent can pay them separately
+    or together. Amounts are Decimal end-to-end — never float.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -98,6 +100,9 @@ class FeeStructure(models.Model):
         'academics.ClassLevel',
         on_delete=models.PROTECT,
         related_name='fee_structures',
+        null=True,
+        blank=True,
+        help_text='Empty means the fee applies to every class in the term.',
     )
     term = models.ForeignKey(
         'academics.Term',
@@ -115,9 +120,16 @@ class FeeStructure(models.Model):
         constraints = [
             # No two fee items with the same name for the same class+term —
             # a duplicate would silently double-bill every invoice generated.
+            # PostgreSQL treats NULL class_level as distinct, so school-wide
+            # fees need their own constraint below.
             models.UniqueConstraint(
                 fields=['class_level', 'term', 'name'],
                 name='uniq_feestructure_class_term_name',
+            ),
+            models.UniqueConstraint(
+                fields=['term', 'name'],
+                condition=models.Q(class_level__isnull=True),
+                name='uniq_feestructure_schoolwide_term_name',
             ),
             models.CheckConstraint(
                 condition=models.Q(amount__gt=0),
@@ -131,8 +143,9 @@ class FeeStructure(models.Model):
 
 class Invoice(models.Model):
     """
-    A student's bill for a term: the sum of all FeeStructure items matching
-    their class_level + term at generation time, itemized via InvoiceLineItem.
+    A student's bill. Class fees for a term share one itemized invoice.
+    Each school-wide fee (no class level) is its own invoice for that term,
+    so it can be paid on its own or in the same Paystack checkout.
 
     Status lifecycle, driven by cumulative *successful* Payments only:
       unpaid → partially_paid → paid
@@ -175,12 +188,6 @@ class Invoice(models.Model):
     class Meta:
         ordering = ['-created_at']
         constraints = [
-            # DB-level backstop for the "skip, don't duplicate" rule in bulk
-            # generation: one invoice per student per term.
-            models.UniqueConstraint(
-                fields=['student', 'term'],
-                name='uniq_invoice_student_term',
-            ),
             models.CheckConstraint(
                 condition=models.Q(total_amount__gte=0),
                 name='invoice_total_amount_non_negative',
@@ -230,6 +237,52 @@ class InvoiceLineItem(models.Model):
         return f'{self.fee_structure.name}: {self.amount} (invoice {self.invoice_id})'
 
 
+class PaymentCheckout(models.Model):
+    """
+    One Paystack transaction that settles two or more invoices.
+
+    The Paystack reference lives here. Each invoice still gets its own
+    Payment row (the amount that credits that invoice), linked through
+    ``checkout``. Single-invoice checkouts do not use this model: their
+    Paystack reference stays on Payment, which is what verify and the
+    webhook already look up.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        SUCCESS = 'success', 'Success'
+        FAILED = 'failed', 'Failed'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reference = models.CharField(max_length=100, unique=True, db_index=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    initiated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='payment_checkouts_initiated',
+    )
+    paid_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name='paymentcheckout_amount_positive',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.reference} {self.amount} [{self.status}]'
+
+
 class Payment(models.Model):
     """
     One attempted (or completed) payment against an Invoice.
@@ -270,6 +323,14 @@ class Payment(models.Model):
         Invoice,
         on_delete=models.PROTECT,
         related_name='payments',
+    )
+    checkout = models.ForeignKey(
+        PaymentCheckout,
+        on_delete=models.PROTECT,
+        related_name='payments',
+        null=True,
+        blank=True,
+        help_text='Set when this row is one invoice inside a combined Paystack checkout.',
     )
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     reference = models.CharField(max_length=100, unique=True, db_index=True)

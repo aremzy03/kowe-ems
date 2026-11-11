@@ -2,7 +2,12 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { academicsApi, type Session, type Term } from "@/lib/api/academics";
+import {
+  academicsApi,
+  currentTerm,
+  type Session,
+  type Term,
+} from "@/lib/api/academics";
 import { MOCK_SESSION_TERM } from "@/lib/mocks/staff-nav";
 import { cn } from "@/lib/cn";
 
@@ -16,7 +21,7 @@ type StaffTopbarProps = {
 /** Prefer the active term; fall back to first term under the active session. */
 function liveTermLabel(sessions: Session[], terms: Term[]): string {
   const sessionById = new Map(sessions.map((s) => [s.id, s]));
-  const activeTerm = terms.find((t) => t.is_active);
+  const activeTerm = currentTerm(terms);
   if (activeTerm) {
     const sessionName =
       sessionById.get(activeTerm.session)?.name ?? "Session";
